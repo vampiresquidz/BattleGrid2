@@ -10,10 +10,13 @@ export interface PeerState {
 
 type Handler = (m: Record<string, unknown>) => void;
 
-// where the relay lives — overridable via VITE_MP_URL, else same host : 8787
+// where the relay lives. Override with VITE_MP_URL. In production the server
+// serves the game AND the relay on one origin, so connect to this page's host
+// over wss://; in local dev the relay is a separate process on :8787.
 export function defaultMpUrl(): string {
   const env = (import.meta as { env?: Record<string, string> }).env?.VITE_MP_URL;
   if (env) return env;
+  if (typeof location !== 'undefined' && location.protocol === 'https:') return `wss://${location.host}`;
   const host = typeof location !== 'undefined' ? location.hostname || 'localhost' : 'localhost';
   return `ws://${host}:8787`;
 }

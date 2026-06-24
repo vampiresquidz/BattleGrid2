@@ -1,12 +1,45 @@
-// Abyssal Grid — multiplayer presence relay.
-// A dumb, stateless-ish broadcast hub: every client streams its overworld state
-// (position, facing, chosen agent) and the server fans it out to everyone else.
-// No game logic lives here — it's just shared presence so the data-world feels
-// inhabited. Run with: npm run server   (PORT env to override 8787)
+// Abyssal Grid server: serves the built game (dist/) AND hosts the multiplayer
+// presence + PvP relay on the same port, so a single DigitalOcean App Platform
+// service runs the whole thing (WebSockets share the site's origin).
+//
+//   local dev:  npm run server   (relay on :8787; the app runs via `npm run dev`)
+//   production: node server/index.mjs   (serves dist/ + relay on $PORT)
 import { WebSocketServer } from 'ws';
+import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { join, normalize, extname, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const PORT = Number(process.env.PORT) || 8787;
-const wss = new WebSocketServer({ port: PORT });
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const DIST = join(ROOT, 'dist');
+
+const MIME = {
+  '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
+  '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg',
+  '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff2': 'font/woff2',
+};
+
+// --- HTTP: serve the static build (no-op in dev when dist/ isn't built) ---
+const http = createServer(async (req, res) => {
+  if (req.url === '/healthz') { res.writeHead(200); res.end('ok'); return; }
+  if (!existsSync(DIST)) { res.writeHead(200); res.end('Abyssal Grid relay online'); return; }
+  try {
+    let p = normalize(decodeURIComponent((req.url || '/').split('?')[0]));
+    if (p === '/' || p.endsWith('/')) p = '/index.html';
+    let file = join(DIST, p);
+    if (!file.startsWith(DIST) || !existsSync(file)) file = join(DIST, 'index.html'); // SPA fallback
+    const body = await readFile(file);
+    res.writeHead(200, { 'content-type': MIME[extname(file)] || 'application/octet-stream' });
+    res.end(body);
+  } catch {
+    res.writeHead(404); res.end('not found');
+  }
+});
+
+// --- WebSocket presence/PvP relay on the same server ---
+const wss = new WebSocketServer({ server: http });
 
 let nextId = 1;
 const clients = new Map(); // ws -> { id, state }
@@ -54,4 +87,6 @@ wss.on('connection', (ws) => {
   ws.on('error', () => { /* ignore; close will clean up */ });
 });
 
-console.log(`[mp] Abyssal Grid presence relay on ws://localhost:${PORT}`);
+http.listen(PORT, () => {
+  console.log(`[abyssal] serving ${existsSync(DIST) ? 'dist/ + ' : ''}presence/PvP relay on :${PORT}`);
+});

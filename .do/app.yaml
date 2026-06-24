@@ -1,0 +1,20 @@
+# DigitalOcean App Platform spec — one service builds the game and serves it
+# together with the multiplayer relay on the same origin.
+#   doctl apps create --spec .do/app.yaml
+name: battlegrid2
+region: nyc
+services:
+  - name: game
+    git:
+      repo_clone_url: https://github.com/vampiresquidz/BattleGrid2.git
+      branch: main
+    environment_slug: node-js
+    build_command: npm install && npm run build
+    run_command: node server/index.mjs
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    instance_count: 1
+    http_port: 8080
+    routes:
+      - path: /
+    health_check:
+      http_path: /healthz
