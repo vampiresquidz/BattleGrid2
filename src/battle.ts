@@ -169,6 +169,10 @@ export class BattleScene {
   // tech chips: reflect (Mirror Shield), phase (Sandbox i-frames)
   private reflectT = 0;
   private phaseT = 0;
+  // unlockable chips: anti-damage trap (dodge+riposte) and Sandbox Panel (halve)
+  private antiT = 0;
+  private antiDmg = 0;
+  private holyT = 0;
   private enemyGuardFlag = false; // PvP: opponent currently shielded (from pstate)
 
   // combat state
@@ -318,7 +322,7 @@ export class BattleScene {
     this.bsend('pstate', {
       col: this.playerPos.col, row: this.playerPos.row,
       hp: this.playerHP, hpMax: this.playerHPMax,
-      guard: this.guardT > 0 || this.reflectT > 0 || this.playerAuraT > 0, // for Stack Smash bonus
+      guard: this.guardT > 0 || this.reflectT > 0 || this.playerAuraT > 0 || this.antiT > 0 || this.holyT > 0, // for Stack Smash bonus
     });
   }
 
@@ -997,6 +1001,72 @@ export class BattleScene {
         this.meleeTiles(tiles, chip.damage, this.boomMat, 1.0, true, true);
         break;
       }
+      // ---- unlockable wave (MMBN-inspired) ----
+      case 'antidmg':
+        // GUARD: arm an anti-damage trap — dodge the next hit and counter.
+        this.antiT = 4.0; this.antiDmg = chip.damage;
+        this.showGuard();
+        break;
+      case 'holy':
+        // GUARD: Sandbox Panel — halve all incoming damage for a window.
+        this.holyT = 5.0;
+        this.showAura();
+        break;
+      case 'muramasa': {
+        // STRIKE: damage equals the integrity you've lost (desperation tech).
+        const lost = Math.max(20, this.playerHPMax - this.playerHP);
+        this.spawnProjectile('player', row, 15, lost, this.slashMat, 1.2);
+        break;
+      }
+      case 'snake': {
+        // STRIKE: one worm per burning node on the field (min 1) — fire synergy.
+        const n = Math.max(1, this.fires.length);
+        for (let k = 0; k < n; k++) this.spawnProjectile('player', row, 14 + k * 2, chip.damage, this.boomMat, 0.7);
+        break;
+      }
+      case 'geddon':
+        // CONTROL: crack every empty enemy node — starve the foe of footing.
+        for (let c = 5; c < COLS; c++) for (let r = 0; r < ROWS; r++) {
+          if (this.enemyPos.col === c && this.enemyPos.row === r) continue;
+          this.grid.crack(c, r);
+          if (Math.random() < 0.35) this.spawnEffect(new THREE.Vector3(colX(c), 0.2, rowZ(r)), this.boomMat, 0.7);
+        }
+        break;
+      case 'lifesword':
+        // STRIKE: the legendary 2×3 blade — two columns ahead, all three rows.
+        this.meleeTiles(
+          [[fromCol + 1, row - 1], [fromCol + 1, row], [fromCol + 1, row + 1],
+           [fromCol + 2, row - 1], [fromCol + 2, row], [fromCol + 2, row + 1]],
+          chip.damage, this.slashMat, 1.3,
+        );
+        break;
+      case 'timebomb': {
+        // BREACH: lay lingering detonation nodes across the foe's row.
+        const c = this.enemyPos.col;
+        for (const dr of [-1, 0, 1]) {
+          const r = this.enemyPos.row + dr;
+          if (r >= 0 && r < ROWS) this.placeFire(c, r, chip.damage);
+        }
+        this.spawnEffect(this.enemy.position.clone(), this.boomMat, 1.4);
+        break;
+      }
+      case 'roll':
+        // SUPPORT: heal AND auto-fire a homing bolt at the foe's current row.
+        this.playerHP = Math.min(this.playerHPMax, this.playerHP + chip.damage);
+        this.spawnEffect(this.player.position.clone(), this.slashMat, 1.0);
+        this.spawnProjectile('player', this.enemyPos.row, 18, Math.round(chip.damage * 0.7), this.cannonMat, 0.8);
+        break;
+      case 'deltaray':
+        // GIGA STRIKE: three auto-aimed slashes rip the foe's current row.
+        for (let k = 0; k < 3; k++) this.spawnProjectile('player', this.enemyPos.row, 20 + k * 2, chip.damage, this.slashMat, 1.0);
+        break;
+      case 'bassgs': {
+        // GIGA BREACH: annihilate the entire enemy field, through guards, cracking all.
+        const tiles: Array<[number, number]> = [];
+        for (let c = 5; c < COLS; c++) for (let r = 0; r < ROWS; r++) tiles.push([c, r]);
+        this.meleeTiles(tiles, chip.damage, this.boomMat, 1.5, true, true);
+        break;
+      }
     }
     this.updateHUD();
   }
@@ -1099,6 +1169,7 @@ export class BattleScene {
     this.enemyFreezeT = 0; this.enemySlowT = 0; this.enemyMarkT = 0;
     this.playerAura = 0; this.playerAuraT = 0; this.nextChipAmp = 0;
     this.playerFreezeT = 0; this.playerMarkT = 0; this.playerResistT = 0;
+    this.antiT = 0; this.holyT = 0; this.reflectT = 0; this.phaseT = 0;
     if (this.auraSprite) this.auraSprite.visible = false;
     if (this.playerFrost) this.playerFrost.visible = false;
     if (this.enemyFrost) this.enemyFrost.visible = false;
@@ -1114,6 +1185,15 @@ export class BattleScene {
     if (this.phaseT > 0) {
       this.phaseT = Math.max(0, this.phaseT - dt);
       if (Math.random() < dt * 8) this.spawnEffect(this.player.position.clone(), this.guardMat, 0.7);
+    }
+    if (this.antiT > 0) {
+      this.antiT = Math.max(0, this.antiT - dt);
+      if (this.antiT <= 0 && this.guardT <= 0 && this.reflectT <= 0 && this.guardSprite) this.guardSprite.visible = false;
+    }
+    if (this.holyT > 0) {
+      this.holyT = Math.max(0, this.holyT - dt);
+      if (this.holyT <= 0 && this.playerAuraT <= 0 && this.auraSprite) this.auraSprite.visible = false;
+      else if (Math.random() < dt * 5) this.spawnEffect(this.player.position.clone(), this.guardMat, 0.6);
     }
     if (this.enemyFreezeT > 0) {
       this.enemyFreezeT -= dt;
@@ -1426,6 +1506,18 @@ export class BattleScene {
     if (this.over) return;
     // Sandbox: phased out — ignore the hit entirely.
     if (this.phaseT > 0) { this.spawnEffect(this.player.position.clone(), this.guardMat, 1.0); return; }
+    // Trap Handler (Anti-Damage): dodge the hit, warp to back line, and riposte.
+    if (this.antiT > 0) {
+      this.antiT = 0;
+      if (this.guardSprite && this.reflectT <= 0 && this.guardT <= 0) this.guardSprite.visible = false;
+      const spot = this.grid.canStand(0, this.playerPos.row, 'player')
+        ? { col: 0, row: this.playerPos.row }
+        : this.grid.anyStandable('player', this.playerPos.row);
+      if (spot) { this.playerPos = spot; this.syncEntity(this.player, this.playerPos); }
+      this.spawnEffect(this.player.position.clone(), this.slashMat, 1.3);
+      this.damageEnemy(this.antiDmg);
+      return;
+    }
     // Mirror Shield: bounce the next hit back at 1.5x and take none.
     if (this.reflectT > 0) {
       this.reflectT = 0;
@@ -1435,6 +1527,7 @@ export class BattleScene {
       return;
     }
     if (this.playerMarkT > 0) d = Math.round(d * 1.5); // Hex amplifies what hits you
+    if (this.holyT > 0) d = Math.ceil(d / 2);          // Sandbox Panel halves incoming
     // Sentinel aura soaks incoming damage before it reaches integrity
     if (this.playerAura > 0) {
       const soak = Math.min(this.playerAura, d);

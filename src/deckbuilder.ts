@@ -2,10 +2,12 @@
 // Codes still drive the Custom-window combo discount, so picking codes that line
 // up your strike / breach / defense / control packages is part of the strategy.
 import {
-  CHIP_DEFS, ALL_CHIP_KINDS, CODES, DECK_SIZE, MAX_COPIES,
-  getDeck, setDeck, defaultDeck, validateDeck, copiesOf,
+  CHIP_DEFS, ALL_CHIP_KINDS, CODES, DECK_SIZE,
+  getDeck, setDeck, defaultDeck, validateDeck, copiesOf, maxCopiesOf, chipUnlocked,
   type DeckEntry, type ChipKind, type ChipClass,
 } from './chips.ts';
+import { getCredits, addCredits } from './characters.ts';
+import { getWins, getUnlockedChips, unlockChip } from './progress.ts';
 
 const CLS_COLOR: Record<ChipClass, string> = {
   strike: '#ff8f6b', guard: '#6bd0ff', breach: '#d98bff',
@@ -34,6 +36,9 @@ export function openDeckBuilder(container: HTMLElement, onClose?: () => void) {
 
   const render = () => {
     const v = validateDeck(deck);
+    const unlocked = getUnlockedChips();
+    const wins = getWins();
+    const credits = getCredits();
     // group deck by kind+code for a tidy list
     const groups = new Map<string, { kind: ChipKind; code: string; n: number }>();
     for (const e of deck) {
@@ -54,18 +59,45 @@ export function openDeckBuilder(container: HTMLElement, onClose?: () => void) {
         </div>`;
       }).join('') || '<div class="db-empty">Empty — add chips from the library →</div>';
 
+    const HEAL_KINDS = new Set<ChipKind>(['recover', 'megaheal', 'bulwark', 'aura', 'roll']);
     const lib = ALL_CHIP_KINDS
       .filter((k) => filter === 'all' || CHIP_DEFS[k].cls === filter)
-      .slice().sort((a, b) => CLS_ORDER.indexOf(CHIP_DEFS[a].cls) - CLS_ORDER.indexOf(CHIP_DEFS[b].cls))
+      // unlockables sort to the end of each class so the core set reads first
+      .slice().sort((a, b) =>
+        (CLS_ORDER.indexOf(CHIP_DEFS[a].cls) - CLS_ORDER.indexOf(CHIP_DEFS[b].cls)) ||
+        ((CHIP_DEFS[a].unlock ? 1 : 0) - (CHIP_DEFS[b].unlock ? 1 : 0)))
       .map((k) => {
         const d = CHIP_DEFS[k];
         const have = copiesOf(deck, k);
-        const full = have >= MAX_COPIES || deck.length >= DECK_SIZE;
+        const max = maxCopiesOf(k);
+        const isUnlocked = chipUnlocked(k, unlocked);
+        const rar = d.rarity === 'giga' ? '<span class="db-rar giga">GIGA</span>'
+                  : d.rarity === 'mega' ? '<span class="db-rar mega">MEGA</span>' : '';
+        const meta = `<div class="db-cardmeta"><span style="color:${CLS_COLOR[d.cls]}">${d.cls}</span>${d.damage ? ' · ' + (HEAL_KINDS.has(k) ? '+' : '') + d.damage : ''}</div>`;
+        if (!isUnlocked) {
+          const u = d.unlock!;
+          const gated = wins < u.wins;            // win milestone not yet reached
+          const afford = credits >= u.cost;
+          const cls = `db-card db-locked${gated ? ' db-gated' : (afford ? ' db-buyable' : ' db-poor')}`;
+          const attr = (!gated && afford) ? `data-unlock="${k}"` : '';
+          const foot = gated
+            ? `<div class="db-lockreq">🔒 Win ${u.wins} <span class="db-dim">(${wins}/${u.wins})</span></div>`
+            : `<div class="db-lockreq">${afford ? 'UNLOCK' : 'NEED'} ◈${u.cost}</div>`;
+          return `<div class="${cls}" ${attr} title="${d.desc}">
+            ${rar}
+            <div class="db-cardtop"><span>${d.icon}</span><span class="db-cost">${d.cost}⚡</span></div>
+            <div class="db-cardname" style="color:${CLS_COLOR[d.cls]}">${d.name}</div>
+            ${meta}
+            ${foot}
+          </div>`;
+        }
+        const full = have >= max || deck.length >= DECK_SIZE;
         return `<div class="db-card${full ? ' db-full' : ''}" data-add="${k}" title="${d.desc}">
+          ${rar}
           <div class="db-cardtop"><span>${d.icon}</span><span class="db-cost">${d.cost}⚡</span></div>
           <div class="db-cardname" style="color:${CLS_COLOR[d.cls]}">${d.name}</div>
-          <div class="db-cardmeta"><span style="color:${CLS_COLOR[d.cls]}">${d.cls}</span>${d.damage ? ' · ' + (d.kind === 'recover' || d.kind === 'megaheal' || d.kind === 'bulwark' || d.kind === 'aura' ? '+' : '') + d.damage : ''}</div>
-          <div class="db-have">${have}/${MAX_COPIES}</div>
+          ${meta}
+          <div class="db-have">${have}/${max}</div>
         </div>`;
       }).join('');
 
@@ -80,6 +112,7 @@ export function openDeckBuilder(container: HTMLElement, onClose?: () => void) {
       <div class="db-panel">
         <div class="db-head">
           <h2>DECK BUILDER</h2>
+          <div class="db-wallet">◈ ${credits} &nbsp;·&nbsp; 🏆 ${wins} wins</div>
           <div class="db-count ${v.ok ? 'ok' : 'bad'}">${deck.length}/${DECK_SIZE} &nbsp;·&nbsp; ${v.msg}</div>
         </div>
         <div class="db-body">
@@ -105,7 +138,7 @@ export function openDeckBuilder(container: HTMLElement, onClose?: () => void) {
 
     el.querySelectorAll('[data-add]').forEach((n) => (n as HTMLElement).onclick = () => {
       const k = (n as HTMLElement).dataset.add as ChipKind;
-      if (deck.length >= DECK_SIZE || copiesOf(deck, k) >= MAX_COPIES) return;
+      if (deck.length >= DECK_SIZE || copiesOf(deck, k) >= maxCopiesOf(k)) return;
       deck.push({ kind: k, code: pen });
       render();
     });
@@ -113,6 +146,14 @@ export function openDeckBuilder(container: HTMLElement, onClose?: () => void) {
       const [kind, code] = (n as HTMLElement).dataset.rm!.split('|');
       const i = deck.findIndex((e) => e.kind === kind && e.code === code);
       if (i >= 0) { deck.splice(i, 1); render(); }
+    });
+    el.querySelectorAll('[data-unlock]').forEach((n) => (n as HTMLElement).onclick = () => {
+      const k = (n as HTMLElement).dataset.unlock as ChipKind;
+      const u = CHIP_DEFS[k].unlock;
+      if (!u || getCredits() < u.cost || getWins() < u.wins) return;
+      addCredits(-u.cost);
+      unlockChip(k);
+      render();
     });
     el.querySelectorAll('[data-pen]').forEach((n) => (n as HTMLElement).onclick = () => { pen = (n as HTMLElement).dataset.pen!; render(); });
     el.querySelectorAll('[data-filt]').forEach((n) => (n as HTMLElement).onclick = () => { filter = (n as HTMLElement).dataset.filt as ChipClass | 'all'; render(); });

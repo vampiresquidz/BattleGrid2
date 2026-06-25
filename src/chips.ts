@@ -13,7 +13,10 @@ export type ChipKind =
   | 'cluster' | 'wsword' | 'gatling' | 'water' | 'volcano'
   | 'freeze' | 'mark' | 'amp' | 'aura' | 'riptide' | 'slow' | 'cleanse'
   // --- tech / recounter wave (deck-building meta) ---
-  | 'emp' | 'reflect' | 'jam' | 'bulwark' | 'shatter' | 'leech' | 'phase' | 'forkbomb';
+  | 'emp' | 'reflect' | 'jam' | 'bulwark' | 'shatter' | 'leech' | 'phase' | 'forkbomb'
+  // --- unlockable wave (MMBN-inspired: earn with wins + credits) ---
+  | 'antidmg' | 'holy' | 'muramasa' | 'snake' | 'geddon'
+  | 'lifesword' | 'timebomb' | 'roll' | 'deltaray' | 'bassgs';
 
 // The counter-triangle class drives the game-theory reads:
 //   strike  → beaten by GUARD (blocked + countered)
@@ -21,6 +24,15 @@ export type ChipKind =
 //   breach  → slow/committal, beaten by fast STRIKE tempo
 // control = zoning/displacement, tempo = action economy, support = sustain.
 export type ChipClass = 'strike' | 'guard' | 'breach' | 'control' | 'tempo' | 'support';
+
+// Rarity (MMBN Standard/Mega/Giga) caps how many copies a legal deck may hold:
+//   standard → MAX_COPIES (4), mega → 2, giga → 1.
+export type ChipRarity = 'standard' | 'mega' | 'giga';
+
+// What it takes to unlock a chip in the deck builder. Base chips have no `unlock`
+// (always available). Locked chips need `wins` encounter victories reached AND a
+// one-time `cost` in credits to buy them into your collection.
+export interface ChipUnlock { wins: number; cost: number }
 
 export interface Chip {
   id: string;          // unique per copy in the folder
@@ -42,6 +54,8 @@ export interface ChipDef {
   cost: number;
   icon: string;
   desc: string;
+  rarity?: ChipRarity;  // default 'standard'
+  unlock?: ChipUnlock;  // present → must be unlocked before it can be deck-built
 }
 
 // AI-agent / compute theme: the player & foes are agents, panels are "nodes",
@@ -90,6 +104,30 @@ export const CHIP_DEFS: Record<ChipKind, ChipDef> = {
   leech:     { name: 'Memory Harvest',kind: 'leech',    cls: 'strike',  damage: 60,  cost: 4, icon: '🧛', desc: 'Heavy shot that heals you for the full damage dealt.' },
   phase:     { name: 'Sandbox',     kind: 'phase',      cls: 'control', damage: 0,   cost: 2, icon: '👻', desc: 'Phase out ~1s: ignore all damage. Dodges burst & combos.' },
   forkbomb:  { name: 'Fork Bomb',   kind: 'forkbomb',   cls: 'breach',  damage: 45,  cost: 4, icon: '🧨', desc: 'Carpet the foe\'s entire back line, through guards. Punishes turtling.' },
+  // --- unlockable wave: classic MMBN chips reimagined, earned via wins + credits ---
+  // Mega-class (≤2 copies) tactical staples
+  antidmg:   { name: 'Trap Handler', kind: 'antidmg',  cls: 'guard',   damage: 70,  cost: 2, icon: '🥷', desc: 'Arm a trap ~4s: dodge the next hit, warp back, and riposte for 70. (Anti-Damage)',
+               rarity: 'mega', unlock: { wins: 3, cost: 300 } },
+  holy:      { name: 'Sandbox Panel',kind: 'holy',     cls: 'guard',   damage: 0,   cost: 2, icon: '🏛️', desc: 'Stand your ground: HALVE all incoming damage for 5s. (HolyPanel)',
+               rarity: 'mega', unlock: { wins: 2, cost: 200 } },
+  muramasa:  { name: 'Segfault Edge',kind: 'muramasa', cls: 'strike',  damage: 0,   cost: 3, icon: '🩻', desc: 'A blade whose damage EQUALS the integrity you\'ve lost. Desperation tech. (Muramasa)',
+               rarity: 'mega', unlock: { wins: 5, cost: 400 } },
+  lifesword: { name: 'Tensor Overrun',kind: 'lifesword',cls: 'strike', damage: 110, cost: 4, icon: '🌟', desc: 'A colossal 2×3 blade ahead — the legendary program advance. (LifeSword)',
+               rarity: 'mega', unlock: { wins: 6, cost: 500 } },
+  // Standard-class (≤4) synergy / utility
+  snake:     { name: 'Worm Swarm',  kind: 'snake',     cls: 'strike',  damage: 25,  cost: 3, icon: '🐍', desc: 'A worm strikes for each burning node on the field — combos with fire/hazards. (Snake)',
+               unlock: { wins: 4, cost: 300 } },
+  geddon:    { name: 'Garbage Collect',kind: 'geddon', cls: 'control', damage: 0,   cost: 3, icon: '🗑️', desc: 'Crack every empty enemy node — starve the foe of footing. (Geddon)',
+               unlock: { wins: 4, cost: 350 } },
+  timebomb:  { name: 'Cron Bomb',   kind: 'timebomb',  cls: 'breach',  damage: 40,  cost: 3, icon: '⏱️', desc: 'Schedule detonations across the foe\'s row — lingering area denial. (TimeBomb)',
+               unlock: { wins: 5, cost: 350 } },
+  roll:      { name: 'Daemon Aid',  kind: 'roll',      cls: 'support', damage: 60,  cost: 3, icon: '🧚', desc: 'Heal 60 AND auto-fire a homing bolt at the foe. (Roll)',
+               unlock: { wins: 3, cost: 250 } },
+  // Giga-class (≤1) ultimates
+  deltaray:  { name: 'Triple Fault',kind: 'deltaray',  cls: 'strike',  damage: 90,  cost: 4, icon: '🜲', desc: 'Three auto-aimed slashes rip the foe\'s row — no aiming needed. (DeltaRay)',
+               rarity: 'giga', unlock: { wins: 10, cost: 800 } },
+  bassgs:    { name: 'Null Reaper', kind: 'bassgs',    cls: 'breach',  damage: 130, cost: 5, icon: '☠️', desc: 'Annihilate the ENTIRE enemy field, through guards, cracking every node. (BassGS)',
+               rarity: 'giga', unlock: { wins: 15, cost: 1200 } },
 };
 
 let uid = 0;
@@ -104,9 +142,20 @@ function makeChip(kind: ChipKind, code: string): Chip {
 // discount in the Custom window, so code-planning is part of the strategy.
 export interface DeckEntry { kind: ChipKind; code: string }
 export const DECK_SIZE = 30;          // a legal deck is exactly this many chips
-export const MAX_COPIES = 4;          // ...with at most this many of any one chip
-export const CODES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'I', 'K', 'L', 'N', 'O', 'Q', 'R', 'S', 'T', 'V', 'W', '*'];
+export const MAX_COPIES = 4;          // standard-rarity copy cap
+export const MEGA_COPIES = 2;         // mega-rarity copy cap
+export const GIGA_COPIES = 1;         // giga-rarity copy cap (one per deck)
+export const CODES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'X', 'Z', '*'];
 export const ALL_CHIP_KINDS = Object.keys(CHIP_DEFS) as ChipKind[];
+
+// How many copies of a KIND a legal deck may hold (rarity-gated).
+export function maxCopiesOf(kind: ChipKind): number {
+  switch (CHIP_DEFS[kind].rarity) {
+    case 'giga': return GIGA_COPIES;
+    case 'mega': return MEGA_COPIES;
+    default: return MAX_COPIES;
+  }
+}
 
 // A balanced 30-card default deck (midrange: strike core + a little defense,
 // control, and combo so new players see every lever). Codes are pre-tuned for
@@ -147,10 +196,16 @@ export function copiesOf(deck: DeckEntry[], kind: ChipKind): number {
   return deck.filter((e) => e.kind === kind).length;
 }
 
+// A chip is usable if it has no unlock gate, or its kind is in the unlocked set.
+export function chipUnlocked(kind: ChipKind, unlocked: Set<string>): boolean {
+  return !CHIP_DEFS[kind].unlock || unlocked.has(kind);
+}
+
 export function validateDeck(deck: DeckEntry[]): { ok: boolean; msg: string } {
   if (deck.length !== DECK_SIZE) return { ok: false, msg: `Deck must be exactly ${DECK_SIZE} chips (have ${deck.length}).` };
   for (const k of ALL_CHIP_KINDS) {
-    if (copiesOf(deck, k) > MAX_COPIES) return { ok: false, msg: `Too many ${CHIP_DEFS[k].name} (max ${MAX_COPIES}).` };
+    const max = maxCopiesOf(k);
+    if (copiesOf(deck, k) > max) return { ok: false, msg: `Too many ${CHIP_DEFS[k].name} (max ${max}).` };
   }
   return { ok: true, msg: 'Legal deck.' };
 }

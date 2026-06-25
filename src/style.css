@@ -372,6 +372,24 @@ kbd {
 .db-have { position: absolute; bottom: 5px; right: 7px; font-size: 10px; color: #7aa; }
 .db-foot { display: flex; align-items: center; gap: 10px; border-top: 1px solid #1d3354; padding-top: 12px; }
 .db-disabled { opacity: .4; pointer-events: none; }
+/* wallet (credits + wins) in the header */
+.db-wallet { margin-left: auto; font-size: 12px; color: #ffd86b; letter-spacing: .04em; }
+/* rarity ribbon */
+.db-rar { position: absolute; top: -1px; right: -1px; font-size: 8px; font-weight: 800; letter-spacing: .08em;
+  padding: 1px 5px; border-bottom-left-radius: 7px; border-top-right-radius: 7px; }
+.db-rar.mega { background: linear-gradient(90deg,#2f6dff,#7a4ff0); color: #eaf2ff; }
+.db-rar.giga { background: linear-gradient(90deg,#ffb000,#ff4d6d); color: #1a0a00; }
+/* locked / unlockable cards */
+.db-card.db-locked { cursor: default; }
+.db-card.db-gated { opacity: .55; border-color: #2a2f44; background: #0a1020; cursor: not-allowed; }
+.db-card.db-gated:hover { transform: none; border-color: #2a2f44; }
+.db-card.db-poor { opacity: .7; border-style: dashed; border-color: #5a4a2a; cursor: not-allowed; }
+.db-card.db-poor:hover { transform: none; border-color: #5a4a2a; }
+.db-card.db-buyable { border-color: #4a7a3a; box-shadow: inset 0 0 0 1px rgba(122,240,160,.25); cursor: pointer; }
+.db-card.db-buyable:hover { border-color: #9eff8f; transform: translateY(-2px); }
+.db-lockreq { margin-top: 4px; text-align: right; font-size: 9px; font-weight: 700; letter-spacing: .04em; color: #c9a24a; }
+.db-card.db-buyable .db-lockreq { color: #9eff8f; }
+.db-card.db-gated .db-lockreq { color: #8a90a8; }
 
 /* ---------------- Loading screen ---------------- */
 .loadscreen { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column;

@@ -10,6 +10,7 @@ const WINS = 'abyssal.ow.wins';         // total encounter battles won (number)
 const QUEST = 'abyssal.ow.quest';       // quest stage: 0 unoffered, 1 active, 2 done
 const QUEST_BASE = 'abyssal.ow.questBaseWins'; // wins tally when the quest started
 const POS = 'abyssal.ow.pos';           // {x,z} last overworld position
+const CHIPS = 'abyssal.unlocked';       // JSON string[] of unlocked locked-chip kinds
 
 function getSet(key: string): Set<number> {
   try {
@@ -41,6 +42,17 @@ export const getQuestStage = () => getNum(QUEST);
 export const setQuestStage = (s: number) => setNum(QUEST, s);
 export const getQuestBaseWins = () => getNum(QUEST_BASE);
 export const setQuestBaseWins = (n: number) => setNum(QUEST_BASE, n);
+
+// --- unlockable chips (string set of chip-kind ids the player has bought) ---
+export function getUnlockedChips(): Set<string> {
+  try {
+    const a = JSON.parse(localStorage.getItem(CHIPS) || '[]');
+    return new Set<string>(Array.isArray(a) ? a : []);
+  } catch { return new Set(); }
+}
+export function unlockChip(kind: string): void {
+  try { const s = getUnlockedChips(); s.add(kind); localStorage.setItem(CHIPS, JSON.stringify([...s])); } catch { /* ignore */ }
+}
 
 export function getPos(): { x: number; z: number } | null {
   try {
