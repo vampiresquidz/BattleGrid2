@@ -16,6 +16,7 @@ const CLS_ORDER: ChipClass[] = ['strike', 'breach', 'guard', 'control', 'tempo',
 export function openDeckBuilder(container: HTMLElement, onClose?: () => void) {
   let deck: DeckEntry[] = getDeck().map((e) => ({ ...e })); // working copy
   let pen = 'A'; // the code newly-added chips receive
+  let filter: ChipClass | 'all' = 'all'; // library class filter
 
   const el = document.createElement('div');
   el.id = 'deckbuilder';
@@ -54,6 +55,7 @@ export function openDeckBuilder(container: HTMLElement, onClose?: () => void) {
       }).join('') || '<div class="db-empty">Empty — add chips from the library →</div>';
 
     const lib = ALL_CHIP_KINDS
+      .filter((k) => filter === 'all' || CHIP_DEFS[k].cls === filter)
       .slice().sort((a, b) => CLS_ORDER.indexOf(CHIP_DEFS[a].cls) - CLS_ORDER.indexOf(CHIP_DEFS[b].cls))
       .map((k) => {
         const d = CHIP_DEFS[k];
@@ -68,6 +70,11 @@ export function openDeckBuilder(container: HTMLElement, onClose?: () => void) {
       }).join('');
 
     const pens = CODES.map((c) => `<span class="db-pen${c === pen ? ' on' : ''}" data-pen="${c}">${c === '*' ? '✷' : c}</span>`).join('');
+    const filters = (['all', ...CLS_ORDER] as const).map((f) => {
+      const n = f === 'all' ? ALL_CHIP_KINDS.length : ALL_CHIP_KINDS.filter((k) => CHIP_DEFS[k].cls === f).length;
+      const col = f === 'all' ? '#bfe8ff' : CLS_COLOR[f];
+      return `<span class="db-filt${f === filter ? ' on' : ''}" data-filt="${f}" style="--fc:${col}">${f} <b>${n}</b></span>`;
+    }).join('');
 
     el.innerHTML = `
       <div class="db-panel">
@@ -81,10 +88,11 @@ export function openDeckBuilder(container: HTMLElement, onClose?: () => void) {
             <div class="db-list">${deckRows}</div>
           </div>
           <div class="db-lib">
-            <div class="db-sub">CHIP LIBRARY <span class="db-dim">— click to add · new chips get code</span>
+            <div class="db-sub">CHIP LIBRARY <span class="db-dim">— click to add · code</span>
               <span class="db-pens">${pens}</span>
             </div>
-            <div class="db-grid">${lib}</div>
+            <div class="db-filters">${filters}</div>
+            <div class="db-grid">${lib || '<div class="db-empty">No chips in this class.</div>'}</div>
           </div>
         </div>
         <div class="db-foot">
@@ -107,6 +115,7 @@ export function openDeckBuilder(container: HTMLElement, onClose?: () => void) {
       if (i >= 0) { deck.splice(i, 1); render(); }
     });
     el.querySelectorAll('[data-pen]').forEach((n) => (n as HTMLElement).onclick = () => { pen = (n as HTMLElement).dataset.pen!; render(); });
+    el.querySelectorAll('[data-filt]').forEach((n) => (n as HTMLElement).onclick = () => { filter = (n as HTMLElement).dataset.filt as ChipClass | 'all'; render(); });
     (el.querySelector('[data-act="reset"]') as HTMLElement).onclick = () => { deck = defaultDeck(); render(); };
     (el.querySelector('[data-act="cancel"]') as HTMLElement).onclick = () => close(false);
     (el.querySelector('[data-act="save"]') as HTMLElement).onclick = () => { if (validateDeck(deck).ok) close(true); };
