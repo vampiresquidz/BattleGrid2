@@ -15,9 +15,10 @@ import { SpriteAnim } from './anim.ts';
 import type { NetClient } from './net.ts';
 import type { AgentBody } from './sprites.ts';
 import {
-  buildStarterFolder, shuffle, comboMatch,
+  buildStarterFolder, shuffle, comboMatch, makeChip, detectPA,
   type Chip,
 } from './chips.ts';
+import { equippedEffects, type AggregatedEffects } from './navicust.ts';
 import type { Session } from './wallet.ts';
 
 // ---------- Grid constants ----------
@@ -174,6 +175,8 @@ export class BattleScene {
   private antiDmg = 0;
   private holyT = 0;
   private enemyGuardFlag = false; // PvP: opponent currently shielded (from pstate)
+  // NaviCust passive programs, aggregated once at battle start
+  private nav: AggregatedEffects = { hp: 0, ram: 0, customSpeed: 0, charge: 0, regen: 0, openingChip: undefined };
 
   // combat state
   private projectiles: Projectile[] = [];
@@ -224,6 +227,12 @@ export class BattleScene {
     this.net = opts.pvp?.net;
     this.oppId = opts.pvp?.oppId ?? 0;
     this.drawPile = shuffle(buildStarterFolder());
+
+    // ---- NaviCust passives: apply before the world/PvP HP mirror is set up ----
+    this.nav = equippedEffects();
+    this.playerHPMax = 200 + this.nav.hp;
+    this.playerHP = this.playerHPMax;
+    if (this.nav.openingChip) this.queue.push(makeChip(this.nav.openingChip, '*'));
 
     // ---- renderer ----
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -606,7 +615,7 @@ export class BattleScene {
     // RAM budget: spend it to queue ANY mix of chips (no more name/code gate).
     // Each enemy-side column you hold grants +1 RAM (cap +3) — territory → tempo.
     const dc = this.territoryBonus();   // captured data centers → bonus RAM
-    const ram = 6 + dc;
+    const ram = 6 + dc + this.nav.ram;  // NaviCust Extra RAM adds to the pool
     const hand = this.drawPile.slice(0, 6);
     const selected: Chip[] = [];
 
@@ -618,6 +627,8 @@ export class BattleScene {
 
     const render = () => {
       const left = ram - spent();
+      const pa = detectPA(selected.map((c) => c.kind)); // live Program Advance read
+      const paLine = pa ? `<div class="cw-pa">✴️ PROGRAM ADVANCE — ${pa.name}!</div>` : '';
       this.customWindow.innerHTML = `
         <div class="cw-panel">
           <h2>ALLOCATE COMPUTE</h2>
@@ -628,6 +639,7 @@ export class BattleScene {
             <button class="btn" data-act="confirm">Add to queue ⏎/Tab</button>
             <button class="btn" data-act="cancel">Cancel Esc</button>
           </div>
+          ${paLine}
           <div class="cw-rule">Selected: ${selected.length ? selected.map((c) => c.name).join(', ') : '—'}</div>
         </div>`;
       const handEl = this.customWindow.querySelector('.cw-hand') as HTMLElement;
@@ -665,7 +677,14 @@ export class BattleScene {
       this.customWindow.innerHTML = '';
       this.paused = false;
       if (apply && selected.length) {
-        this.queue.push(...selected);
+        // PROGRAM ADVANCE: an exact ordered recipe fuses into one super-op.
+        const pa = detectPA(selected.map((c) => c.kind));
+        if (pa) {
+          this.queue.push({ id: 'pa-' + pa.id, name: pa.name, code: '*', kind: 'pa', cls: 'strike', damage: 0, cost: 0, icon: pa.icon, desc: pa.desc, paId: pa.id });
+          this.flashPA(pa.name);
+        } else {
+          this.queue.push(...selected);
+        }
         this.drawPile = [...this.drawPile.slice(hand.length), ...hand]; // rotate hand to the back
         this.custom = 0;
       }
@@ -736,7 +755,7 @@ export class BattleScene {
     const firing = this.keys['KeyJ'] || this.mouseLeft;
     if (firing) {
       this.charging = true;
-      if (!this.chargeConsumed) this.chargeT += dt;
+      if (!this.chargeConsumed) this.chargeT += dt * (1 + this.nav.charge);
     } else if (this.charging) {
       if (!this.chargeConsumed) {
         if (this.chargeT >= CHARGE_FULL) this.fireCharged();
@@ -1067,8 +1086,50 @@ export class BattleScene {
         this.meleeTiles(tiles, chip.damage, this.boomMat, 1.5, true, true);
         break;
       }
+      case 'pa':
+        this.firePA(chip.paId!, row, fromCol);
+        break;
     }
     this.updateHUD();
+  }
+
+  // Fire a fused Program Advance. Recipes are bigger/wider than any single chip.
+  private firePA(paId: string, row: number, fromCol: number) {
+    this.spawnEffect(this.player.position.clone(), this.guardMat, 1.8);
+    switch (paId) {
+      case 'gigacannon':
+        // one devastating piercing bolt down the row
+        this.spawnProjectile('player', row, 22, 220, this.cannonMat, 1.4, true);
+        break;
+      case 'lifesaber': {
+        // a 2×3 piercing megablade two columns ahead
+        const tiles: Array<[number, number]> = [];
+        for (let dc = 1; dc <= 2; dc++) for (let dr = -1; dr <= 1; dr++) tiles.push([fromCol + dc, row + dr]);
+        this.meleeTiles(tiles, 200, this.slashMat, 1.5, false, true);
+        break;
+      }
+      case 'hyperburst':
+        // a 12-shot hyper barrage down the row
+        for (let k = 0; k < 12; k++) this.spawnProjectile('player', row, 16 + k * 0.8, 22, this.busterMat, 0.5);
+        break;
+      case 'meteorrain': {
+        // bombard the entire enemy field, cracking nodes
+        const tiles: Array<[number, number]> = [];
+        for (let c = 5; c < COLS; c++) for (let r = 0; r < ROWS; r++) tiles.push([c, r]);
+        this.meleeTiles(tiles, 110, this.boomMat, 1.3, true, true);
+        break;
+      }
+    }
+  }
+
+  // a brief on-screen banner when a Program Advance triggers
+  private flashPA(name: string) {
+    const t = document.createElement('div');
+    t.className = 'pa-flash';
+    t.textContent = `✴ PROGRAM ADVANCE ✴  ${name}`;
+    this.container.appendChild(t);
+    setTimeout(() => t.classList.add('show'), 10);
+    setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 400); }, 1400);
   }
 
   // --- Aegis barrier visuals + DataMine placement ---
@@ -1738,7 +1799,12 @@ export class BattleScene {
 
     if (!this.paused && !this.over) {
       if (this.custom < CUSTOM_TIME) {
-        this.custom = Math.min(CUSTOM_TIME, this.custom + dt);
+        this.custom = Math.min(CUSTOM_TIME, this.custom + dt * (1 + this.nav.customSpeed));
+        this.updateHUD();
+      }
+      // NaviCust Self-Repair: passive integrity regen up to your max
+      if (this.nav.regen && this.playerHP > 0 && this.playerHP < this.playerHPMax) {
+        this.playerHP = Math.min(this.playerHPMax, this.playerHP + this.nav.regen * dt);
         this.updateHUD();
       }
       this.handleInput(dt);

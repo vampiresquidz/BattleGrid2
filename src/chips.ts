@@ -16,7 +16,9 @@ export type ChipKind =
   | 'emp' | 'reflect' | 'jam' | 'bulwark' | 'shatter' | 'leech' | 'phase' | 'forkbomb'
   // --- unlockable wave (MMBN-inspired: earn with wins + credits) ---
   | 'antidmg' | 'holy' | 'muramasa' | 'snake' | 'geddon'
-  | 'lifesword' | 'timebomb' | 'roll' | 'deltaray' | 'bassgs';
+  | 'lifesword' | 'timebomb' | 'roll' | 'deltaray' | 'bassgs'
+  // synthesized Program Advance op (never in a deck; built at fire time)
+  | 'pa';
 
 // The counter-triangle class drives the game-theory reads:
 //   strike  → beaten by GUARD (blocked + countered)
@@ -44,6 +46,7 @@ export interface Chip {
   cost: number;        // RAM spent to queue this chip in a Custom turn
   icon: string;        // emoji placeholder
   desc: string;
+  paId?: string;       // set only on a synthesized Program Advance chip
 }
 
 export interface ChipDef {
@@ -128,10 +131,12 @@ export const CHIP_DEFS: Record<ChipKind, ChipDef> = {
                rarity: 'giga', unlock: { wins: 10, cost: 800 } },
   bassgs:    { name: 'Null Reaper', kind: 'bassgs',    cls: 'breach',  damage: 130, cost: 5, icon: '☠️', desc: 'Annihilate the ENTIRE enemy field, through guards, cracking every node. (BassGS)',
                rarity: 'giga', unlock: { wins: 15, cost: 1200 } },
+  // synthesized at fire time when a Program Advance recipe is queued — never deck-built.
+  pa:        { name: 'Program Advance', kind: 'pa',    cls: 'strike',  damage: 0,   cost: 0, icon: '✴️', desc: 'A fused super-op from a chip combo.' },
 };
 
 let uid = 0;
-function makeChip(kind: ChipKind, code: string): Chip {
+export function makeChip(kind: ChipKind, code: string): Chip {
   const d = CHIP_DEFS[kind];
   return { id: `${kind}-${uid++}`, name: d.name, code, kind, cls: d.cls, damage: d.damage, cost: d.cost, icon: d.icon, desc: d.desc };
 }
@@ -146,7 +151,27 @@ export const MAX_COPIES = 4;          // standard-rarity copy cap
 export const MEGA_COPIES = 2;         // mega-rarity copy cap
 export const GIGA_COPIES = 1;         // giga-rarity copy cap (one per deck)
 export const CODES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'X', 'Z', '*'];
-export const ALL_CHIP_KINDS = Object.keys(CHIP_DEFS) as ChipKind[];
+// every deck-buildable kind (excludes the synthesized 'pa' op)
+export const ALL_CHIP_KINDS = (Object.keys(CHIP_DEFS) as ChipKind[]).filter((k) => k !== 'pa');
+
+// ---------------- Program Advances ----------------
+// Queue an EXACT ordered sequence of chips in one Custom window and they fuse
+// into a single super-op (classic MMBN). Match is by kind, in order, whole queue.
+export interface ProgramAdvance { id: string; name: string; recipe: ChipKind[]; icon: string; desc: string }
+export const PROGRAM_ADVANCES: ProgramAdvance[] = [
+  { id: 'gigacannon', name: 'Giga Cannon',  recipe: ['cannon', 'cannon', 'cannon'], icon: '🌠',
+    desc: 'Logic Bolt ×3 → one devastating piercing bolt down your row (220).' },
+  { id: 'lifesaber',  name: 'Life Saber',   recipe: ['sword', 'wsword', 'lance'],  icon: '🌟',
+    desc: 'Backprop → Tensor Slash → Zero-Day → a 2×3 piercing megablade (200).' },
+  { id: 'hyperburst', name: 'Hyper Burst',  recipe: ['vulcan', 'vulcan', 'vulcan'], icon: '🌀',
+    desc: 'Batch Infer ×3 → a 12-shot hyper barrage down your row.' },
+  { id: 'meteorrain', name: 'Meteor Rain',  recipe: ['bomb', 'bomb', 'bomb'],       icon: '☄️',
+    desc: 'Kernel Panic ×3 → bombards the ENTIRE enemy field, cracking nodes (110).' },
+];
+export function detectPA(kinds: ChipKind[]): ProgramAdvance | null {
+  return PROGRAM_ADVANCES.find((pa) =>
+    pa.recipe.length === kinds.length && pa.recipe.every((k, i) => k === kinds[i])) || null;
+}
 
 // How many copies of a KIND a legal deck may hold (rarity-gated).
 export function maxCopiesOf(kind: ChipKind): number {
@@ -210,19 +235,72 @@ export function validateDeck(deck: DeckEntry[]): { ok: boolean; msg: string } {
   return { ok: true, msg: 'Legal deck.' };
 }
 
-// --- persistence ---
-const DECK_KEY = 'abyssal.deck';
-export function getDeck(): DeckEntry[] {
+// --- persistence: multiple named deck slots ---
+// Decks live in `abyssal.decks` = { slots: {name, entries}[], active }. The old
+// single `abyssal.deck` is migrated into slot 0 on first read. getDeck/setDeck
+// always operate on the ACTIVE slot, so battle code is unchanged.
+const DECKS_KEY = 'abyssal.decks';
+const LEGACY_KEY = 'abyssal.deck';
+export const MAX_DECK_SLOTS = 5;
+export interface DeckSlot { name: string; entries: DeckEntry[] }
+interface DecksStore { slots: DeckSlot[]; active: number }
+
+function sanitizeEntries(arr: unknown): DeckEntry[] {
+  if (!Array.isArray(arr)) return [];
+  return arr
+    .filter((e) => e && CHIP_DEFS[(e as DeckEntry).kind] && typeof (e as DeckEntry).code === 'string')
+    .map((e) => ({ kind: (e as DeckEntry).kind, code: (e as DeckEntry).code }));
+}
+function readLegacy(): DeckEntry[] {
   try {
-    const raw = JSON.parse(localStorage.getItem(DECK_KEY) || 'null');
-    if (Array.isArray(raw) && raw.length && raw.every((e) => e && CHIP_DEFS[e.kind as ChipKind] && typeof e.code === 'string')) {
-      return raw.map((e) => ({ kind: e.kind as ChipKind, code: e.code as string }));
-    }
-  } catch { /* fall through */ }
+    const e = sanitizeEntries(JSON.parse(localStorage.getItem(LEGACY_KEY) || 'null'));
+    if (e.length) return e;
+  } catch { /* ignore */ }
   return defaultDeck();
 }
+function readDecks(): DecksStore {
+  try {
+    const raw = JSON.parse(localStorage.getItem(DECKS_KEY) || 'null');
+    if (raw && Array.isArray(raw.slots) && raw.slots.length) {
+      const slots: DeckSlot[] = raw.slots.map((s: { name?: string; entries?: unknown }, i: number) => ({
+        name: typeof s?.name === 'string' && s.name ? s.name : `Deck ${i + 1}`,
+        entries: sanitizeEntries(s?.entries),
+      }));
+      const active = Math.min(Math.max(0, raw.active | 0), slots.length - 1);
+      return { slots, active };
+    }
+  } catch { /* fall through to migration */ }
+  return { slots: [{ name: 'Deck 1', entries: readLegacy() }], active: 0 };
+}
+function writeDecks(store: DecksStore): void {
+  try { localStorage.setItem(DECKS_KEY, JSON.stringify(store)); } catch { /* ignore */ }
+}
+
+export function getDeckSlots(): DeckSlot[] { return readDecks().slots.map((s) => ({ name: s.name, entries: s.entries.map((e) => ({ ...e })) })); }
+export function getActiveSlot(): number { return readDecks().active; }
+export function setActiveSlot(i: number): void { const s = readDecks(); if (i >= 0 && i < s.slots.length) { s.active = i; writeDecks(s); } }
+export function renameDeck(i: number, name: string): void { const s = readDecks(); if (s.slots[i]) { s.slots[i].name = (name.trim().slice(0, 16)) || `Deck ${i + 1}`; writeDecks(s); } }
+export function addDeckSlot(): number {
+  const s = readDecks();
+  if (s.slots.length >= MAX_DECK_SLOTS) return s.active;
+  s.slots.push({ name: `Deck ${s.slots.length + 1}`, entries: defaultDeck() });
+  s.active = s.slots.length - 1;
+  writeDecks(s);
+  return s.active;
+}
+export function deleteDeckSlot(i: number): void {
+  const s = readDecks();
+  if (s.slots.length <= 1 || !s.slots[i]) return;
+  s.slots.splice(i, 1);
+  if (s.active >= s.slots.length) s.active = s.slots.length - 1;
+  writeDecks(s);
+}
+
+export function getDeck(): DeckEntry[] { const s = readDecks(); return s.slots[s.active].entries.map((e) => ({ ...e })); }
 export function setDeck(deck: DeckEntry[]): void {
-  try { localStorage.setItem(DECK_KEY, JSON.stringify(deck)); } catch { /* ignore */ }
+  const s = readDecks();
+  s.slots[s.active] = { name: s.slots[s.active].name, entries: deck.map((e) => ({ ...e })) };
+  writeDecks(s);
 }
 
 // The battle draw pile = the player's saved deck (or the default).

@@ -208,6 +208,19 @@ kbd {
 .chipcard .dmg { color: var(--gold); font-size: 12px; font-weight: 700; }
 .cw-actions { display: flex; gap: 12px; justify-content: center; }
 .cw-rule { font-size: 11px; opacity: 0.55; margin-top: 10px; }
+.cw-pa { margin-top: 10px; font-weight: 800; letter-spacing: .08em; font-size: 13px;
+  color: #1a0a00; background: linear-gradient(90deg,#ffd86b,#ff8f6b,#d98bff);
+  border-radius: 6px; padding: 6px 10px; text-align: center;
+  box-shadow: 0 0 18px rgba(255,180,80,.6); animation: paPulse .7s ease-in-out infinite; }
+@keyframes paPulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.25); } }
+
+/* Program Advance trigger toast (in battle) */
+.pa-flash { position: fixed; left: 50%; top: 32%; transform: translate(-50%,-50%) scale(.8);
+  z-index: 150; pointer-events: none; opacity: 0; transition: opacity .25s, transform .25s;
+  font: 800 26px/1 ui-monospace, monospace; letter-spacing: .12em; color: #fff7e0;
+  text-shadow: 0 0 16px #ffae3b, 0 0 38px #ff5a9e, 0 0 60px #b06bff;
+  white-space: nowrap; }
+.pa-flash.show { opacity: 1; transform: translate(-50%,-50%) scale(1); }
 
 /* ---------- Result banner ---------- */
 #result {
@@ -390,6 +403,50 @@ kbd {
 .db-lockreq { margin-top: 4px; text-align: right; font-size: 9px; font-weight: 700; letter-spacing: .04em; color: #c9a24a; }
 .db-card.db-buyable .db-lockreq { color: #9eff8f; }
 .db-card.db-gated .db-lockreq { color: #8a90a8; }
+/* mode tabs (Chips / Programs) */
+.db-tabs { display: flex; gap: 6px; }
+.db-tab { cursor: pointer; font-size: 13px; font-weight: 700; letter-spacing: .06em; padding: 4px 12px;
+  border-radius: 7px 7px 0 0; color: #7e93b8; border: 1px solid #24406b; border-bottom: none; background: #0a1426; }
+.db-tab.on { color: #bfe8ff; background: #15233f; box-shadow: inset 0 2px 0 #5cc8ff; }
+.db-tab:hover { color: #dfe9ff; }
+/* deck slot tabs */
+.db-slots { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 0 2px; }
+.db-slot { cursor: pointer; font-size: 11px; padding: 4px 10px; border-radius: 6px; border: 1px solid #24406b;
+  color: #9cc6ff; background: #0c1830; display: inline-flex; align-items: center; gap: 5px; }
+.db-slot:hover { border-color: #5cc8ff; }
+.db-slot.on { border-color: #5cc8ff; color: #fff; box-shadow: inset 0 0 0 1px #5cc8ff; }
+.db-slot.db-slotadd { color: #7af0c0; border-style: dashed; }
+.db-slotedit, .db-slotdel { cursor: pointer; opacity: .6; font-size: 10px; }
+.db-slotedit:hover { opacity: 1; color: #ffd86b; } .db-slotdel:hover { opacity: 1; color: #ff6b6b; }
+/* deck analytics */
+.db-stats { margin-top: 8px; border: 1px solid #1d3354; border-radius: 8px; padding: 8px 10px; background: rgba(0,0,0,.2); }
+.db-statrow { display: flex; align-items: flex-end; gap: 8px; margin: 4px 0; font-size: 10px; }
+.db-bars { display: flex; gap: 4px; align-items: flex-end; height: 34px; flex: 1; }
+.db-bar { position: relative; flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
+.db-barfill { width: 100%; min-height: 2px; background: linear-gradient(180deg,#5cc8ff,#2f6dff); border-radius: 2px 2px 0 0; }
+.db-bar span { font-size: 8px; color: #6f86ad; margin-top: 1px; }
+.db-clsrow { flex-wrap: wrap; }
+.db-clschip { font-size: 9px; padding: 2px 6px; border-radius: 4px; color: var(--c); border: 1px solid var(--c); opacity: .9; }
+.db-statnums { justify-content: space-between; color: #8aa; }
+.db-statnums b { color: #cfe6ff; }
+/* Program Advance reference */
+.db-pasub { margin-top: 10px; font-size: 11px; letter-spacing: .04em; color: #ffd08a; }
+.db-palist { margin-top: 5px; display: flex; flex-direction: column; gap: 4px; }
+.db-parow { display: flex; align-items: center; gap: 8px; font-size: 10px; padding: 4px 7px; border-radius: 6px;
+  background: rgba(255,180,80,.07); border: 1px solid rgba(255,180,80,.18); }
+.db-paic { font-size: 13px; }
+.db-paname { font-weight: 700; color: #ffe0a8; min-width: 86px; }
+.db-parecipe { color: #9cc6ff; letter-spacing: .04em; }
+/* NaviCust */
+.db-bodyprog { display: block; overflow-y: auto; }
+.db-membar { position: relative; height: 22px; border-radius: 6px; background: rgba(120,160,220,.12);
+  border: 1px solid #2c4a7a; overflow: hidden; margin-bottom: 10px; }
+.db-memfill { height: 100%; background: linear-gradient(90deg,#7a4ff0,#2f9be8); transition: width .15s ease; }
+.db-memlabel { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; letter-spacing: .06em; color: #eaf2ff; text-shadow: 0 1px 3px #000; }
+.db-proggrid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+.db-card.db-prog .db-cardmeta { white-space: normal; min-height: 26px; }
+.db-card.db-prog.on { border-color: #9eff8f; box-shadow: inset 0 0 0 1px rgba(158,255,143,.4); background: #0e2018; }
 
 /* ---------------- Loading screen ---------------- */
 .loadscreen { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column;
