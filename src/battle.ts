@@ -280,9 +280,12 @@ export class BattleScene {
     const tex = humanoidTexture(o.oppTint, 'left', 0.45, o.oppBody as AgentBody);
     const mat = this.enemy.material as THREE.SpriteMaterial;
     mat.map = tex; mat.needsUpdate = true;
-    this.enemy.scale.set(3.0, 3.0, 1);
+    // render the opponent agent exactly like the player (same size & centre
+    // anchor) — the AI enemy was bottom-anchored at 3.0 which read as a giant.
+    this.enemy.center.set(0.5, 0.5);
+    this.enemy.scale.set(2.0, 2.0, 1);
     this.enemyBaseY = 1.15;
-    this.enemyAnim?.setLook(tex, tex, 3.0, 3.0);
+    this.enemyAnim?.setLook(tex, tex, 2.0, 2.0);
     this.enemyAnim?.setSheets({}); // drop the AI enemy's Seedance strips
     this.syncEntity(this.enemy, this.enemyPos);
     const nm = this.hud?.querySelector('#hp-enemy .ename') as HTMLElement | null;

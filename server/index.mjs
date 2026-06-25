@@ -53,10 +53,23 @@ function broadcast(except, obj) {
   }
 }
 
+// heartbeat: App Platform / proxies can drop a socket without a clean close,
+// which would leave a frozen "ghost" player. Ping every 30s and reap silent ones.
+const beat = setInterval(() => {
+  for (const ws of clients.keys()) {
+    if (ws.isAlive === false) { ws.terminate(); continue; } // fires 'close' → leave
+    ws.isAlive = false;
+    try { ws.ping(); } catch { /* gone */ }
+  }
+}, 30000);
+wss.on('close', () => clearInterval(beat));
+
 wss.on('connection', (ws) => {
   const id = nextId++;
   const c = { id, state: { x: 0, z: 6, name: 'agent', body: 'humanoid', tint: '', facing: 'down', moving: false, running: false } };
   clients.set(ws, c);
+  ws.isAlive = true;
+  ws.on('pong', () => { ws.isAlive = true; });
 
   ws.on('message', (buf) => {
     let m;
