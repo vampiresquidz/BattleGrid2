@@ -277,11 +277,14 @@ export class BattleScene {
     // the foe is the opponent's chosen agent, facing left toward you
     this.enemyHP = this.playerHPMax; this.enemyHPMax = this.playerHPMax;
     this.enemyDef = { ...this.enemyDef, name: o.oppName };
-    const tex = humanoidTexture(o.oppTint, 'left', 0.45, o.oppBody as AgentBody);
+    // opponent in the same BATTLE stance as the player, mirrored to face left
+    // (the player's battle view aims +x; the foe must aim -x at the player).
+    const tex = humanoidTexture(o.oppTint, 'battle', 0.45, o.oppBody as AgentBody);
+    tex.repeat.x = -1; tex.offset.x = 1; // horizontal flip
     const mat = this.enemy.material as THREE.SpriteMaterial;
     mat.map = tex; mat.needsUpdate = true;
-    // render the opponent agent exactly like the player (same size & centre
-    // anchor) — the AI enemy was bottom-anchored at 3.0 which read as a giant.
+    // render exactly like the player: same size & centre anchor (the AI enemy
+    // was bottom-anchored at 3.0, which read as a floating giant).
     this.enemy.center.set(0.5, 0.5);
     this.enemy.scale.set(2.0, 2.0, 1);
     this.enemyBaseY = 1.15;
