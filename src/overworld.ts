@@ -40,6 +40,7 @@ import {
 } from './progress.ts';
 import { NetClient, defaultMpUrl, type PeerState } from './net.ts';
 import { openDeckBuilder } from './deckbuilder.ts';
+import { openChipShop } from './shop.ts';
 
 const BOUNDS = { x: 28, z: 19 };  // expanded play area
 const SPEED = 6.4;
@@ -131,6 +132,7 @@ export class OverworldScene {
   private warpEl?: HTMLElement;
   private questEl?: HTMLElement;
   private deckOpen = false;
+  private shopOpen = false;
   private saveT = 0;
 
   // multiplayer presence
@@ -332,6 +334,13 @@ export class OverworldScene {
     this.addActor(vendor, 7, -2, 1.5, 2.8,
       () => 'Browse the AGENT SHOP',
       () => this.openRoster());
+
+    // The Chip Merchant — opens the CHIP SHOP (buy unlockable chips, daily deals).
+    // Magenta cortex so it reads as a distinct vendor next to the gold agent shop.
+    const merchant = this.makeSprite(humanoidTexture('#d96bff', 'front', 0.9, 'cortex'), 3.0);
+    this.addActor(merchant, 11, -2, 1.5, 2.8,
+      () => 'Browse the CHIP SHOP',
+      () => this.openShop());
 
     // The Archivist — flavor lore, hints about shards.
     const arch = this.makeSprite(humanoidTexture('#46e0a0', 'front', 0.9, 'cortex'), 3.0);
@@ -863,9 +872,15 @@ export class OverworldScene {
   private toggleRoster() { this.rosterOpen ? this.closeRoster() : this.openRoster(); }
 
   private openDeck() {
-    if (this.deckOpen || this.rosterOpen || this.warpOpen || this.talking || !!this.challengeEl) return;
+    if (this.deckOpen || this.shopOpen || this.rosterOpen || this.warpOpen || this.talking || !!this.challengeEl) return;
     this.deckOpen = true;
     openDeckBuilder(this.container, () => { this.deckOpen = false; });
+  }
+
+  private openShop() {
+    if (this.shopOpen || this.deckOpen || this.rosterOpen || this.warpOpen || this.talking || !!this.challengeEl) return;
+    this.shopOpen = true;
+    openChipShop(this.container, () => { this.shopOpen = false; this.updateCredits(); });
   }
 
   private openRoster() {
@@ -1052,7 +1067,7 @@ export class OverworldScene {
     this.updateActorFocus();
     this.updatePeerFocus();
     for (const code of this.fresh) {
-      if (this.deckOpen) break; // the deck builder modal owns input
+      if (this.deckOpen || this.shopOpen) break; // an open modal owns input
       if (code === 'KeyB') this.openDeck();
       else if (code === 'KeyC') this.toggleRoster();
       else if (code === 'Escape') {
@@ -1078,7 +1093,7 @@ export class OverworldScene {
 
     let dir: Dir | null = null;
     let running = false;
-    if (!this.talking && !this.done && !this.rosterOpen && !this.warpOpen && !this.challengeEl && !this.deckOpen) {
+    if (!this.talking && !this.done && !this.rosterOpen && !this.warpOpen && !this.challengeEl && !this.deckOpen && !this.shopOpen) {
       let dx = 0, dz = 0;
       if (this.keys['KeyA'] || this.keys['ArrowLeft']) dx -= 1;
       if (this.keys['KeyD'] || this.keys['ArrowRight']) dx += 1;
@@ -1107,7 +1122,7 @@ export class OverworldScene {
     }
 
     // interaction prompt (actors take priority; else offer a duel to a nearby player)
-    if (this.deckOpen) {
+    if (this.deckOpen || this.shopOpen) {
       this.prompt.style.display = 'none';
     } else if (!this.talking && !this.rosterOpen && !this.warpOpen && !this.challengeEl && this.currentActor) {
       this.prompt.textContent = `E · ${this.currentActor.prompt()}`;
