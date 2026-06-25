@@ -11,7 +11,9 @@ export type ChipKind =
   | 'guard' | 'lance' | 'mine' | 'wind' | 'overclock'
   | 'vulcan' | 'drain' | 'blink' | 'quake' | 'megaheal' | 'flamecannon' | 'minibomb'
   | 'cluster' | 'wsword' | 'gatling' | 'water' | 'volcano'
-  | 'freeze' | 'mark' | 'amp' | 'aura' | 'riptide' | 'slow' | 'cleanse';
+  | 'freeze' | 'mark' | 'amp' | 'aura' | 'riptide' | 'slow' | 'cleanse'
+  // --- tech / recounter wave (deck-building meta) ---
+  | 'emp' | 'reflect' | 'jam' | 'bulwark' | 'shatter' | 'leech' | 'phase' | 'forkbomb';
 
 // The counter-triangle class drives the game-theory reads:
 //   strike  → beaten by GUARD (blocked + countered)
@@ -79,6 +81,15 @@ export const CHIP_DEFS: Record<ChipKind, ChipDef> = {
   riptide:   { name: 'Backpressure',kind: 'riptide',    cls: 'strike',  damage: 40,  cost: 3, icon: '🌊', desc: 'Row shot; +40 vs an enemy pinned to its back columns.' },
   slow:      { name: 'Throttle Core',kind: 'slow',      cls: 'tempo',   damage: 10,  cost: 3, icon: '🐌', desc: 'Halve the enemy\'s action speed for 4s — out-tempo it.' },
   cleanse:   { name: 'Rollback',    kind: 'cleanse',    cls: 'support', damage: 0,   cost: 2, icon: '🧹', desc: 'Purge your debuffs and resist new ones for 3s.' },
+  // --- tech / recounter wave: deck-building answers to whole archetypes ---
+  emp:       { name: 'EMP Spike',   kind: 'emp',        cls: 'control', damage: 20,  cost: 3, icon: '📡', desc: 'Strip the foe\'s buffs (shield/aura/overdrive) + chip damage. Counters combo & defense.' },
+  reflect:   { name: 'Mirror Shield',kind: 'reflect',   cls: 'guard',   damage: 0,   cost: 3, icon: '🪞', desc: 'For 2.5s, reflect the next hit back at 1.5×. Punishes aggro.' },
+  jam:       { name: 'Throughput Choke',kind: 'jam',    cls: 'control', damage: 10,  cost: 2, icon: '🚧', desc: 'Damage + drain the foe\'s Custom gauge. Denies combo/control setup.' },
+  bulwark:   { name: 'Hardened Runtime',kind: 'bulwark',cls: 'guard',   damage: 160, cost: 4, icon: '🏰', desc: 'Aura soaks up to 160 over 6s — a wall against aggro.' },
+  shatter:   { name: 'Stack Smash', kind: 'shatter',    cls: 'breach',  damage: 60,  cost: 3, icon: '🔨', desc: 'Pierces the row through guards; DOUBLE vs a shielded target.' },
+  leech:     { name: 'Memory Harvest',kind: 'leech',    cls: 'strike',  damage: 60,  cost: 4, icon: '🧛', desc: 'Heavy shot that heals you for the full damage dealt.' },
+  phase:     { name: 'Sandbox',     kind: 'phase',      cls: 'control', damage: 0,   cost: 2, icon: '👻', desc: 'Phase out ~1s: ignore all damage. Dodges burst & combos.' },
+  forkbomb:  { name: 'Fork Bomb',   kind: 'forkbomb',   cls: 'breach',  damage: 45,  cost: 4, icon: '🧨', desc: 'Carpet the foe\'s entire back line, through guards. Punishes turtling.' },
 };
 
 let uid = 0;
@@ -87,55 +98,81 @@ function makeChip(kind: ChipKind, code: string): Chip {
   return { id: `${kind}-${uid++}`, name: d.name, code, kind, cls: d.cls, damage: d.damage, cost: d.cost, icon: d.icon, desc: d.desc };
 }
 
-// A starter folder of 30 chips with assorted letter codes.
-export function buildStarterFolder(): Chip[] {
-  const recipe: Array<[ChipKind, string, number]> = [
-    ['cannon', 'A', 4],
-    ['cannon', 'B', 3],
-    ['cannon', '*', 1],
-    ['shotgun', 'A', 3],
-    ['shotgun', 'C', 3],
-    ['sword', 'S', 3],
-    ['sword', 'L', 2],
-    ['bomb', 'B', 3],
-    ['bomb', 'T', 2],
-    ['recover', 'R', 4],
-    ['recover', '*', 2],
-    ['grab', 'G', 2],
-    // game-theory wave
-    ['guard', 'D', 3],
-    ['lance', 'L', 2],   // shares code L with Sword → combo discount
-    ['mine', 'T', 2],    // shares code T with Bomb
-    ['wind', 'W', 2],
-    ['overclock', 'O', 2],
-    // expanded items
-    ['vulcan', 'V', 3],
-    ['drain', 'N', 2],
-    ['blink', 'K', 2],
-    ['quake', 'Q', 2],
-    ['megaheal', 'R', 2],     // shares code R with Checkpoint
-    ['flamecannon', 'F', 2],
-    ['minibomb', 'T', 2],     // shares code T with Kernel Panic / Honeypot
-    ['cluster', 'G', 1],      // shares code G with Provision
-    // expanded chip set
-    ['wsword', 'S', 2],       // shares code S with Sword
-    ['gatling', 'V', 2],      // shares code V with Batch Infer
-    ['water', 'W', 2],        // shares code W with Rate Limit
-    ['volcano', 'F', 2],      // shares code F with GPU Burn
-    // setup / synergy chips — codes group them into build-around packages:
-    ['freeze', 'I', 2],       // I = lockdown package (Deadlock + Exploit Tag)
-    ['mark', 'I', 2],         // shares I with Deadlock → control combo discount
-    ['amp', 'O', 2],          // O = tempo/buff package (shares with Overclock)
-    ['aura', 'D', 2],         // D = defense package (shares with Firewall)
-    ['riptide', 'W', 2],      // W = water/displacement package (Cache Flush / Rate Limit)
-    ['slow', 'O', 1],         // shares O with Overdrive / Overclock
-    ['cleanse', 'R', 2],      // R = support package (Checkpoint / Snapshot) → counter to debuffs
-  ];
-  const folder: Chip[] = [];
-  for (const [kind, code, count] of recipe) {
-    for (let i = 0; i < count; i++) folder.push(makeChip(kind, code));
+// ---------------- Deck building ----------------
+// A deck is an ORDERED list of {kind, code} entries. The battle shuffles it into
+// the draw pile. Codes still matter: matching NAME or CODE gives the combo
+// discount in the Custom window, so code-planning is part of the strategy.
+export interface DeckEntry { kind: ChipKind; code: string }
+export const DECK_SIZE = 30;          // a legal deck is exactly this many chips
+export const MAX_COPIES = 4;          // ...with at most this many of any one chip
+export const CODES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'I', 'K', 'L', 'N', 'O', 'Q', 'R', 'S', 'T', 'V', 'W', '*'];
+export const ALL_CHIP_KINDS = Object.keys(CHIP_DEFS) as ChipKind[];
+
+// A balanced 30-card default deck (midrange: strike core + a little defense,
+// control, and combo so new players see every lever). Codes are pre-tuned for
+// combo discounts (S sword package, B/T breach, R sustain, D defense, I control).
+const DEFAULT_RECIPE: Array<[ChipKind, string, number]> = [
+  ['cannon', 'A', 3],
+  ['cannon', '*', 1],
+  ['shotgun', 'A', 3],
+  ['sword', 'S', 3],
+  ['wsword', 'S', 2],     // combos with Sword (code S)
+  ['bomb', 'B', 3],
+  ['lance', 'B', 2],      // combos with Bomb (code B)
+  ['recover', 'R', 3],
+  ['megaheal', 'R', 1],   // combos with Checkpoint (code R)
+  ['guard', 'D', 2],
+  ['aura', 'D', 1],       // combos with Firewall (code D)
+  ['vulcan', 'V', 2],
+  ['drain', 'N', 1],
+  ['mark', 'I', 1],
+  ['amp', 'O', 1],
+  ['blink', 'K', 1],
+];
+
+function recipeToDeck(recipe: Array<[ChipKind, string, number]>): DeckEntry[] {
+  const out: DeckEntry[] = [];
+  for (const [kind, code, n] of recipe) for (let i = 0; i < n; i++) out.push({ kind, code });
+  return out;
+}
+
+export function defaultDeck(): DeckEntry[] { return recipeToDeck(DEFAULT_RECIPE); }
+
+export function deckToChips(deck: DeckEntry[]): Chip[] {
+  return deck.filter((e) => CHIP_DEFS[e.kind]).map((e) => makeChip(e.kind, e.code));
+}
+
+// max copies of a given chip KIND allowed in a legal deck
+export function copiesOf(deck: DeckEntry[], kind: ChipKind): number {
+  return deck.filter((e) => e.kind === kind).length;
+}
+
+export function validateDeck(deck: DeckEntry[]): { ok: boolean; msg: string } {
+  if (deck.length !== DECK_SIZE) return { ok: false, msg: `Deck must be exactly ${DECK_SIZE} chips (have ${deck.length}).` };
+  for (const k of ALL_CHIP_KINDS) {
+    if (copiesOf(deck, k) > MAX_COPIES) return { ok: false, msg: `Too many ${CHIP_DEFS[k].name} (max ${MAX_COPIES}).` };
   }
-  return folder;
+  return { ok: true, msg: 'Legal deck.' };
+}
+
+// --- persistence ---
+const DECK_KEY = 'abyssal.deck';
+export function getDeck(): DeckEntry[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(DECK_KEY) || 'null');
+    if (Array.isArray(raw) && raw.length && raw.every((e) => e && CHIP_DEFS[e.kind as ChipKind] && typeof e.code === 'string')) {
+      return raw.map((e) => ({ kind: e.kind as ChipKind, code: e.code as string }));
+    }
+  } catch { /* fall through */ }
+  return defaultDeck();
+}
+export function setDeck(deck: DeckEntry[]): void {
+  try { localStorage.setItem(DECK_KEY, JSON.stringify(deck)); } catch { /* ignore */ }
+}
+
+// The battle draw pile = the player's saved deck (or the default).
+export function buildStarterFolder(): Chip[] {
+  return deckToChips(getDeck());
 }
 
 export function shuffle<T>(arr: T[]): T[] {

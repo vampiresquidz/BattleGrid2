@@ -39,6 +39,7 @@ import {
   getPos, savePos,
 } from './progress.ts';
 import { NetClient, defaultMpUrl, type PeerState } from './net.ts';
+import { openDeckBuilder } from './deckbuilder.ts';
 
 const BOUNDS = { x: 28, z: 19 };  // expanded play area
 const SPEED = 6.4;
@@ -129,6 +130,7 @@ export class OverworldScene {
   private warpOpen = false;
   private warpEl?: HTMLElement;
   private questEl?: HTMLElement;
+  private deckOpen = false;
   private saveT = 0;
 
   // multiplayer presence
@@ -777,7 +779,7 @@ export class OverworldScene {
 
     const hint = document.createElement('div');
     hint.id = 'ow-hint';
-    hint.innerHTML = `<kbd>WASD</kbd> move &nbsp; <kbd>Shift</kbd> run &nbsp; <kbd>E</kbd> interact &nbsp; <kbd>C</kbd> agent &nbsp; <kbd>drag</kbd> rotate &nbsp; <kbd>wheel</kbd> zoom`;
+    hint.innerHTML = `<kbd>WASD</kbd> move &nbsp; <kbd>Shift</kbd> run &nbsp; <kbd>E</kbd> interact &nbsp; <kbd>F</kbd> duel &nbsp; <kbd>C</kbd> agent &nbsp; <kbd>B</kbd> deck`;
     this.container.appendChild(hint); this.dom.push(hint);
 
     const credits = document.createElement('div');
@@ -824,6 +826,13 @@ export class OverworldScene {
     rosterBtn.onclick = () => this.openRoster();
     this.container.appendChild(rosterBtn); this.dom.push(rosterBtn);
 
+    const deckBtn = document.createElement('button');
+    deckBtn.className = 'btn';
+    deckBtn.textContent = '⊟ DECK';
+    deckBtn.style.cssText = 'position:fixed;top:52px;left:16px;z-index:12;font-size:13px;letter-spacing:.08em;padding:8px 14px';
+    deckBtn.onclick = () => this.openDeck();
+    this.container.appendChild(deckBtn); this.dom.push(deckBtn);
+
     this.prompt = document.createElement('div');
     this.prompt.id = 'ow-prompt';
     this.prompt.textContent = 'Press E';
@@ -852,6 +861,12 @@ export class OverworldScene {
 
   // ---------------- Agent shop (character select + purchase) ----------------
   private toggleRoster() { this.rosterOpen ? this.closeRoster() : this.openRoster(); }
+
+  private openDeck() {
+    if (this.deckOpen || this.rosterOpen || this.warpOpen || this.talking || !!this.challengeEl) return;
+    this.deckOpen = true;
+    openDeckBuilder(this.container, () => { this.deckOpen = false; });
+  }
 
   private openRoster() {
     if (this.rosterOpen) return;
@@ -1037,7 +1052,9 @@ export class OverworldScene {
     this.updateActorFocus();
     this.updatePeerFocus();
     for (const code of this.fresh) {
-      if (code === 'KeyC') this.toggleRoster();
+      if (this.deckOpen) break; // the deck builder modal owns input
+      if (code === 'KeyB') this.openDeck();
+      else if (code === 'KeyC') this.toggleRoster();
       else if (code === 'Escape') {
         if (this.rosterOpen) this.closeRoster();
         else if (this.warpOpen) this.closeWarp();
@@ -1061,7 +1078,7 @@ export class OverworldScene {
 
     let dir: Dir | null = null;
     let running = false;
-    if (!this.talking && !this.done && !this.rosterOpen && !this.warpOpen && !this.challengeEl) {
+    if (!this.talking && !this.done && !this.rosterOpen && !this.warpOpen && !this.challengeEl && !this.deckOpen) {
       let dx = 0, dz = 0;
       if (this.keys['KeyA'] || this.keys['ArrowLeft']) dx -= 1;
       if (this.keys['KeyD'] || this.keys['ArrowRight']) dx += 1;
@@ -1090,7 +1107,9 @@ export class OverworldScene {
     }
 
     // interaction prompt (actors take priority; else offer a duel to a nearby player)
-    if (!this.talking && !this.rosterOpen && !this.warpOpen && !this.challengeEl && this.currentActor) {
+    if (this.deckOpen) {
+      this.prompt.style.display = 'none';
+    } else if (!this.talking && !this.rosterOpen && !this.warpOpen && !this.challengeEl && this.currentActor) {
       this.prompt.textContent = `E · ${this.currentActor.prompt()}`;
       this.prompt.style.display = 'block';
     } else if (!this.talking && !this.rosterOpen && !this.warpOpen && !this.challengeEl && this.currentPeer && !this.challengeOutTo) {

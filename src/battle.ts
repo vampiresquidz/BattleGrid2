@@ -166,6 +166,10 @@ export class BattleScene {
   private chargeT = 0;
   private chargeConsumed = false;
   private chargeSprite?: THREE.Sprite;
+  // tech chips: reflect (Mirror Shield), phase (Sandbox i-frames)
+  private reflectT = 0;
+  private phaseT = 0;
+  private enemyGuardFlag = false; // PvP: opponent currently shielded (from pstate)
 
   // combat state
   private projectiles: Projectile[] = [];
@@ -314,6 +318,7 @@ export class BattleScene {
     this.bsend('pstate', {
       col: this.playerPos.col, row: this.playerPos.row,
       hp: this.playerHP, hpMax: this.playerHPMax,
+      guard: this.guardT > 0 || this.reflectT > 0 || this.playerAuraT > 0, // for Stack Smash bonus
     });
   }
 
@@ -335,6 +340,7 @@ export class BattleScene {
       this.enemyPos = { col: this.mcol(m.col as number), row: m.row as number };
       this.syncEntity(this.enemy, this.enemyPos);
       this.enemyHP = m.hp as number; this.enemyHPMax = m.hpMax as number;
+      this.enemyGuardFlag = !!m.guard;
       this.updateHUD();
       if (this.enemyHP <= 0) this.endBattle(true);
     } else if (sub === 'shot') {
@@ -351,6 +357,19 @@ export class BattleScene {
       }
     } else if (sub === 'status') {
       if (m.knock) { for (let i = 0; i < (m.knock as number); i++) this.shoveSelfBack(); }
+      if (m.strip) {
+        // EMP hit me: clear my buffs (shield/aura/overdrive/reflect)
+        this.playerAura = 0; this.playerAuraT = 0; this.nextChipAmp = 0;
+        this.guardT = 0; this.reflectT = 0;
+        if (this.auraSprite) this.auraSprite.visible = false;
+        if (this.guardSprite) this.guardSprite.visible = false;
+        this.spawnEffect(this.player.position.clone(), this.waterMat, 1.3);
+      }
+      if (m.jam) {
+        // Throughput Choke: sabotage my Custom tempo
+        this.custom = Math.max(0, this.custom - CUSTOM_TIME * 0.6);
+        this.updateHUD();
+      }
     } else if (sub === 'over') {
       this.endBattle(true);
     }
@@ -926,6 +945,58 @@ export class BattleScene {
         this.playerResistT = 3.0;
         this.spawnEffect(this.player.position.clone(), this.guardMat, 1.3);
         break;
+      // ---- tech / recounter chips ----
+      case 'emp':
+        // CONTROL: strip the foe's buffs (shield/aura/overdrive), then chip it.
+        this.enemyGuardT = 0; this.enemyGuardCounter = 0;
+        if (this.enemyGuardSprite) this.enemyGuardSprite.visible = false;
+        if (this.pvp) this.bsend('status', { strip: true });
+        this.spawnEffect(this.enemy.position.clone(), this.waterMat, 1.5);
+        this.damageEnemy(chip.damage);
+        break;
+      case 'reflect':
+        // GUARD: arm a mirror that bounces the next incoming hit at 1.5x.
+        this.reflectT = 2.5;
+        this.showGuard();
+        break;
+      case 'jam':
+        // CONTROL: damage + sabotage the foe's Custom tempo.
+        this.damageEnemy(chip.damage);
+        if (this.pvp) this.bsend('status', { jam: 1 });
+        else this.enemySlowT = Math.max(this.enemySlowT, 3.0);
+        this.spawnEffect(this.enemy.position.clone(), this.busterMat, 1.3);
+        break;
+      case 'bulwark':
+        // GUARD: a heavy absorbing aura — the anti-aggro wall.
+        this.playerAura = chip.damage; this.playerAuraT = 6.0;
+        this.showAura();
+        break;
+      case 'shatter': {
+        // BREACH: pierce the row through guards; DOUBLE vs a shielded target.
+        const shielded = this.pvp ? this.enemyGuardFlag : (this.enemyGuardT > 0);
+        const dmg = shielded ? chip.damage * 2 : chip.damage;
+        this.meleeTiles(
+          Array.from({ length: COLS - 1 - fromCol }, (_, i) => [fromCol + 1 + i, row] as [number, number]),
+          dmg, this.boomMat, 1.1, false, true,
+        );
+        break;
+      }
+      case 'leech':
+        // STRIKE: heavy shot that heals you for the FULL damage dealt.
+        this.spawnProjectile('player', row, 16, chip.damage, this.waterMat, 0.95, false, chip.damage);
+        break;
+      case 'phase':
+        // CONTROL: phase out ~1s — ignore all incoming damage.
+        this.phaseT = 1.0;
+        this.spawnEffect(this.player.position.clone(), this.guardMat, 1.4);
+        break;
+      case 'forkbomb': {
+        // BREACH: carpet the foe's entire back two columns, through guards.
+        const tiles: Array<[number, number]> = [];
+        for (const c of [COLS - 1, COLS - 2]) for (let r = 0; r < ROWS; r++) tiles.push([c, r]);
+        this.meleeTiles(tiles, chip.damage, this.boomMat, 1.0, true, true);
+        break;
+      }
     }
     this.updateHUD();
   }
@@ -1036,6 +1107,14 @@ export class BattleScene {
 
   // tick the setup-chip status effects (freeze / slow / mark / aura) + their cues
   private updateStatuses(dt: number) {
+    if (this.reflectT > 0) {
+      this.reflectT = Math.max(0, this.reflectT - dt);
+      if (this.reflectT <= 0 && this.guardT <= 0 && this.guardSprite) this.guardSprite.visible = false;
+    }
+    if (this.phaseT > 0) {
+      this.phaseT = Math.max(0, this.phaseT - dt);
+      if (Math.random() < dt * 8) this.spawnEffect(this.player.position.clone(), this.guardMat, 0.7);
+    }
     if (this.enemyFreezeT > 0) {
       this.enemyFreezeT -= dt;
       if (Math.random() < dt * 7) this.spawnEffect(this.enemy.position.clone(), this.waterMat, 0.7);
@@ -1345,6 +1424,16 @@ export class BattleScene {
 
   private damagePlayer(d: number) {
     if (this.over) return;
+    // Sandbox: phased out — ignore the hit entirely.
+    if (this.phaseT > 0) { this.spawnEffect(this.player.position.clone(), this.guardMat, 1.0); return; }
+    // Mirror Shield: bounce the next hit back at 1.5x and take none.
+    if (this.reflectT > 0) {
+      this.reflectT = 0;
+      if (this.guardSprite) this.guardSprite.visible = false;
+      this.spawnEffect(this.player.position.clone(), this.guardMat, 1.4);
+      this.damageEnemy(Math.round(d * 1.5));
+      return;
+    }
     if (this.playerMarkT > 0) d = Math.round(d * 1.5); // Hex amplifies what hits you
     // Sentinel aura soaks incoming damage before it reaches integrity
     if (this.playerAura > 0) {
