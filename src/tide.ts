@@ -183,25 +183,30 @@ export const rerollCost = REROLL_COST;
 
 // ---------------- Cosmetics vault (◊ sinks) ----------------
 export type CosmeticKind = 'title' | 'badge' | 'color';
-export interface Cosmetic { id: string; kind: CosmeticKind; name: string; price: number; value: string }
+// `nft: true` = a LEGENDARY-tier cosmetic. Only these become real on-chain
+// Metaplex NFTs in a later phase; everything else stays a lightweight off-chain
+// cosmetic. Kept scarce + top-priced so the NFT tier is genuine prestige.
+export interface Cosmetic { id: string; kind: CosmeticKind; name: string; price: number; value: string; nft?: boolean }
 export const COSMETICS: Cosmetic[] = [
   // badges (shown before your name to other players)
   { id: 'b_wave',  kind: 'badge', name: 'Tidecaller Badge', price: 60,  value: '🌊' },
   { id: 'b_skull', kind: 'badge', name: 'Reaper Badge',     price: 90,  value: '☠️' },
   { id: 'b_snow',  kind: 'badge', name: 'Cryo Badge',       price: 90,  value: '❄️' },
   { id: 'b_bolt',  kind: 'badge', name: 'Overclock Badge',  price: 120, value: '⚡' },
-  { id: 'b_crown', kind: 'badge', name: 'Apex Badge',       price: 220, value: '👑' },
+  { id: 'b_crown', kind: 'badge', name: 'Apex Badge',       price: 400, value: '👑', nft: true },
   // titles
   { id: 't_rookie',kind: 'title', name: 'Title: Rookie',     price: 40,  value: 'Rookie' },
   { id: 't_tempest',kind:'title', name: 'Title: Tempest Caller', price: 150, value: 'Tempest Caller' },
   { id: 't_zero',  kind: 'title', name: 'Title: Absolute Zero',  price: 150, value: 'Absolute Zero' },
-  { id: 't_apex',  kind: 'title', name: 'Title: Apex Process',   price: 300, value: 'Apex Process' },
+  { id: 't_apex',  kind: 'title', name: 'Title: Apex Process',   price: 500, value: 'Apex Process', nft: true },
   // name colors
   { id: 'c_cyan',  kind: 'color', name: 'Name Color: Cyan',  price: 50,  value: '#39d0ff' },
   { id: 'c_magenta',kind:'color', name: 'Name Color: Magenta',price: 50, value: '#d96bff' },
   { id: 'c_gold',  kind: 'color', name: 'Name Color: Gold',  price: 120, value: '#ffd86b' },
   { id: 'c_mint',  kind: 'color', name: 'Name Color: Mint',  price: 120, value: '#9effc4' },
+  { id: 'c_prism', kind: 'color', name: 'Name Color: Prismatic', price: 450, value: '#7af0ff', nft: true },
 ];
+export function isNftCosmetic(id: string): boolean { return !!COSMETICS.find((c) => c.id === id)?.nft; }
 
 export function getOwnedCosmetics(): string[] { return [...cur().owned]; }
 export function ownsCosmetic(id: string): boolean { return cur().owned.includes(id); }

@@ -69,7 +69,9 @@ export function openOps(container: HTMLElement, onClose?: () => void) {
         const state = equipped ? 'equipped' : own ? 'owned' : afford ? 'buyable' : 'poor';
         const attr = own ? `data-equip="${c.id}"` : (afford ? `data-mint="${c.id}"` : '');
         const foot = equipped ? '✓ EQUIPPED' : own ? 'Equip' : afford ? `Mint ◊${c.price}` : `◊${c.price}`;
-        return `<div class="ops-cos ${state}" ${attr}>
+        const ribbon = c.nft ? '<span class="ops-nft" title="Legendary — becomes a real on-chain NFT in a later phase">◆ NFT</span>' : '';
+        return `<div class="ops-cos ${state}${c.nft ? ' legendary' : ''}" ${attr}>
+          ${ribbon}
           <div class="ops-cos-ic">${icon(c)}</div>
           <div class="ops-cos-name">${c.name.replace(/^(Title|Name Color): /, '')}</div>
           <div class="ops-cos-btn">${foot}</div>
@@ -93,7 +95,7 @@ export function openOps(container: HTMLElement, onClose?: () => void) {
         </div>
         <div class="ops-body">${tab === 'quests' ? questsHTML() : vaultHTML()}</div>
         <div class="ops-foot">
-          <span class="db-dim">${tab === 'quests' ? 'Earn ◊ TIDE by winning. Spend it on cosmetics in the Vault.' : 'Cosmetics are pure flex — badges show to other players. No effect on power.'}</span>
+          <span class="db-dim">${tab === 'quests' ? 'Earn ◊ TIDE by winning. Spend it on cosmetics in the Vault.' : 'Pure flex — no effect on power. Only ◆ NFT (legendary) cosmetics become real on-chain collectibles.'}</span>
           <span style="flex:1"></span>
           <button class="btn" data-act="close">Close · Esc</button>
         </div>
