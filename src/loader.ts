@@ -135,6 +135,33 @@ export const BATTLE_ASSETS = ALL_SPRITES.filter(
   (u) => /_battle|\/battle\/|anim_|enemy_|meme_/.test(u),
 );
 
+// Enemy roster order (must match ENEMY_ROSTER in battle.ts) → sprite filename key.
+const ENEMY_KEYS = ['tralalero', 'tungtung', 'angler', 'ballerina', 'bombardiro', 'crab', 'hallucination', 'daemon', 'trainer', 'crawler'];
+// body archetype → its static battle base PNG stem
+const BODY_BATTLE_BASE: Record<string, string> = { humanoid: 'agent_battle', monkey: 'monkey_battle', evilbot: 'robot_battle', cortex: 'cortex_battle' };
+
+// Only the battle art a SPECIFIC fight needs: the combatant bodies' battle sheets
+// + (for PvE) the one enemy being fought. Preloading the whole 100 MB battle set
+// every time was the main cause of long battle loads on the no-CDN host.
+export function battleAssetsFor(enemyIndex: number | null, bodies: Array<string | undefined>): string[] {
+  const out = new Set<string>();
+  for (const b of bodies) {
+    if (!b) continue;
+    out.add(`/sprites/battle/${b}_idle.png`);
+    out.add(`/sprites/battle/${b}_atk.png`);
+    out.add(`/sprites/battle/${b}_melee.png`);
+    const base = BODY_BATTLE_BASE[b];
+    if (base) out.add(`/sprites/${base}.png`);
+  }
+  if (enemyIndex != null) {
+    const key = ENEMY_KEYS[enemyIndex % ENEMY_KEYS.length];
+    const re = new RegExp(`(anim|enemy|meme)_${key}`);
+    for (const u of ALL_SPRITES) if (re.test(u)) out.add(u);
+  }
+  // never request a URL that isn't a real asset
+  return [...out].filter((u) => ALL_SPRITES.includes(u));
+}
+
 // Preload a list of image URLs, reporting progress 0..1. Resolves once every
 // image has settled (load OR error — a missing file must never hang the screen).
 // Returns the elapsed milliseconds so callers can log/measure real load time.

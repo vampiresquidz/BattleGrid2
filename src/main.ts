@@ -3,7 +3,8 @@ import { BattleScene } from './battle.ts';
 import { OverworldScene } from './overworld.ts';
 import { login, isPhantomInstalled, tryEagerConnect, type Session } from './wallet.ts';
 import { runLoading } from './loadingScreen.ts';
-import { OVERWORLD_ASSETS, BATTLE_ASSETS } from './loader.ts';
+import { OVERWORLD_ASSETS, battleAssetsFor } from './loader.ts';
+import { getSelectedBody } from './characters.ts';
 
 const app = document.getElementById('app')!;
 
@@ -53,8 +54,10 @@ function showLogin() {
 let overworld: OverworldScene | null = null;
 
 async function showOverworld(session: Session, label = 'Loading sector…') {
-  // preload overworld art behind the loading screen (startup + return-from-battle)
-  await runLoading(app, OVERWORLD_ASSETS, { title: 'ABYSSAL&nbsp;GRID', label, minMs: 900 });
+  // preload overworld art behind the loading screen (startup + return-from-battle).
+  // On return everything's cached so this resolves instantly; the small floor just
+  // avoids a sub-frame flash.
+  await runLoading(app, OVERWORLD_ASSETS, { title: 'ABYSSAL&nbsp;GRID', label, minMs: 400 });
   overworld = new OverworldScene(app, session, {
     onEncounter: (enemyIndex) => startEncounter(session, enemyIndex),
     onPvp: (info) => startPvp(session, info),
@@ -64,8 +67,10 @@ async function showOverworld(session: Session, label = 'Loading sector…') {
 async function startEncounter(session: Session, enemyIndex: number) {
   overworld?.dispose();
   overworld = null;
-  // preload battle art first — on the no-CDN host these strips stall otherwise
-  await runLoading(app, BATTLE_ASSETS, { title: 'ENGAGING', label: 'Compiling combat node…', minMs: 600 });
+  // preload ONLY this fight's art (player body + the one enemy) — not the whole
+  // 100 MB battle set, which made every battle stall on the no-CDN host.
+  const assets = battleAssetsFor(enemyIndex, [getSelectedBody()]);
+  await runLoading(app, assets, { title: 'ENGAGING', label: 'Compiling combat node…', minMs: 300 });
   new BattleScene(app, session, {
     startIndex: enemyIndex,
     encounter: true,
@@ -78,7 +83,9 @@ async function startEncounter(session: Session, enemyIndex: number) {
 async function startPvp(session: Session, info: import('./overworld.ts').PvpInfo) {
   overworld?.dispose();
   overworld = null;
-  await runLoading(app, BATTLE_ASSETS, { title: 'DUEL', label: 'Syncing opponent…', minMs: 600 });
+  // no roster enemy — just the two combatant bodies' battle sheets
+  const assets = battleAssetsFor(null, [getSelectedBody(), info.oppBody]);
+  await runLoading(app, assets, { title: 'DUEL', label: 'Syncing opponent…', minMs: 300 });
   new BattleScene(app, session, {
     encounter: true,
     pvp: info,
@@ -93,8 +100,9 @@ const params = new URLSearchParams(location.search);
 if (params.has('dev')) {
   const session: Session = { address: 'DEV', short: 'DEV', signature: '' };
   if (params.has('battle')) {
-    runLoading(app, BATTLE_ASSETS, { title: 'ENGAGING', label: 'Compiling combat node…', minMs: 600 })
-      .then(() => new BattleScene(app, session, { startIndex: Number(params.get('enemy') ?? 0) }));
+    const idx = Number(params.get('enemy') ?? 0);
+    runLoading(app, battleAssetsFor(idx, [getSelectedBody()]), { title: 'ENGAGING', label: 'Compiling combat node…', minMs: 300 })
+      .then(() => new BattleScene(app, session, { startIndex: idx }));
   } else { void showOverworld(session); }
 } else {
   showLogin();

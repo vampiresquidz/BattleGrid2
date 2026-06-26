@@ -7,7 +7,7 @@ import { preloadImages } from './loader.ts';
 interface Opts { minMs?: number; title?: string; label?: string }
 
 export async function runLoading(container: HTMLElement, urls: string[], opts: Opts = {}): Promise<number> {
-  const { minMs = 500, title = 'ABYSSAL&nbsp;GRID', label = 'Loading assets…' } = opts;
+  const { minMs = 300, title = 'ABYSSAL&nbsp;GRID', label = 'Loading assets…' } = opts;
 
   const el = document.createElement('div');
   el.className = 'loadscreen';
@@ -50,7 +50,7 @@ export async function runLoading(container: HTMLElement, urls: string[], opts: O
   await floor; // don't flash for cache-hit instant loads
 
   el.classList.add('ls-done');
-  await new Promise<void>((r) => setTimeout(r, 360)); // fade out
+  await new Promise<void>((r) => setTimeout(r, 200)); // fade out
   el.remove();
   return ms; // measured real load time (ms) — caller may log it
 }
