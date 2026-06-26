@@ -19,6 +19,8 @@ export type ChipKind =
   | 'lifesword' | 'timebomb' | 'roll' | 'deltaray' | 'bassgs'
   // --- ice / cryo wave (freeze synergy → Absolute Zero PA) ---
   | 'iceshot' | 'blizzard' | 'icewall'
+  // --- wind / air wave (knockback synergy → Tempest PA) ---
+  | 'galeshot' | 'cyclone' | 'windwall'
   // synthesized Program Advance op (never in a deck; built at fire time)
   | 'pa';
 
@@ -140,6 +142,13 @@ export const CHIP_DEFS: Record<ChipKind, ChipDef> = {
                rarity: 'mega', unlock: { wins: 6, cost: 450 } },
   icewall:   { name: 'Heat Sink',   kind: 'icewall',   cls: 'guard',   damage: 40,  cost: 2, icon: '🏔️', desc: 'Icy barrier: blocks + counters AND freezes whoever strikes it.',
                unlock: { wins: 4, cost: 350 } },
+  // --- wind / air wave: knockback / displacement, fuse all three into Tempest ---
+  galeshot:  { name: 'Gale Force',  kind: 'galeshot',  cls: 'control', damage: 40,  cost: 3, icon: '🌬️', desc: 'Ranged blast that SHOVES the foe back 2 columns — pins it to its wall.',
+               unlock: { wins: 3, cost: 300 } },
+  cyclone:   { name: 'Cyclone',     kind: 'cyclone',   cls: 'strike',  damage: 55,  cost: 4, icon: '🌪️', desc: 'A vortex tears the foe\'s ENTIRE column (all rows) — no dodging by row.',
+               rarity: 'mega', unlock: { wins: 6, cost: 450 } },
+  windwall:  { name: 'Air Filter',  kind: 'windwall',  cls: 'guard',   damage: 40,  cost: 2, icon: '🪭', desc: 'Wind barrier: blocks + counters AND blasts the attacker back on block.',
+               unlock: { wins: 4, cost: 350 } },
   // synthesized at fire time when a Program Advance recipe is queued — never deck-built.
   pa:        { name: 'Program Advance', kind: 'pa',    cls: 'strike',  damage: 0,   cost: 0, icon: '✴️', desc: 'A fused super-op from a chip combo.' },
 };
@@ -178,6 +187,8 @@ export const PROGRAM_ADVANCES: ProgramAdvance[] = [
     desc: 'Kernel Panic ×3 → bombards the ENTIRE enemy field, cracking nodes (110).' },
   { id: 'abszero',    name: 'Absolute Zero', recipe: ['iceshot', 'blizzard', 'icewall'], icon: '🥶',
     desc: 'Cryo Lock → Flash Freeze → Heat Sink → freeze the foe 4s and shatter the whole field (120).' },
+  { id: 'tempest',    name: 'Tempest',       recipe: ['galeshot', 'cyclone', 'windwall'], icon: '⛈️',
+    desc: 'Gale Force → Cyclone → Air Filter → slam the foe to its wall and rake the whole field (120).' },
 ];
 export function detectPA(kinds: ChipKind[]): ProgramAdvance | null {
   return PROGRAM_ADVANCES.find((pa) =>

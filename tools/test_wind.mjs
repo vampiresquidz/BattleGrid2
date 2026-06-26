@@ -1,0 +1,34 @@
+import { chromium } from 'playwright';
+const browser = await chromium.launch({ channel: 'chrome', headless: true,
+  args: ['--use-gl=angle','--use-angle=swiftshader','--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const errors = [];
+page.on('pageerror', e => errors.push(String(e)));
+await page.goto('http://localhost:5175/?dev&battle&enemy=0');
+await page.waitForFunction(() => !!window.__battle, { timeout: 12000 });
+await page.waitForTimeout(700);
+const res = await page.evaluate(async () => {
+  const b = window.__battle;
+  const mk = (kind) => ({ id:kind, name:kind, code:'A', kind, cls:'control', damage:55, cost:3, icon:'x', desc:'' });
+  const out = {};
+  const reset = (col) => { b.enemyHP=9999; b.enemyHPMax=9999; b.over=false; b.enemyFreezeT=0;
+    b.enemyPos={col, row:b.playerPos.row}; b.syncEntity(b.enemy, b.enemyPos); };
+  let hp, col0;
+  reset(6); hp=b.enemyHP; col0=b.enemyPos.col;
+  b.queue=[mk('galeshot')]; b.fireChip();
+  await new Promise(r=>setTimeout(r,700));
+  out.galeshot = { dmg: hp-b.enemyHP, pushedCols: b.enemyPos.col-col0 };
+  reset(5); hp=b.enemyHP; col0=b.enemyPos.col;
+  b.queue=[mk('cyclone')]; b.fireChip();
+  await new Promise(r=>setTimeout(r,150));
+  out.cyclone = { dmg: hp-b.enemyHP, pushedCols: b.enemyPos.col-col0 };
+  reset(5); hp=b.enemyHP;
+  b.queue=[{ id:'pa', name:'Tempest', code:'*', kind:'pa', cls:'strike', damage:0, cost:0, icon:'x', desc:'', paId:'tempest' }];
+  b.fireChip();
+  await new Promise(r=>setTimeout(r,150));
+  out.tempest = { dmg: hp-b.enemyHP, finalCol: b.enemyPos.col };
+  return out;
+});
+console.log(JSON.stringify(res));
+console.log(errors.length ? 'ERR:\n'+errors.join('\n') : 'no errors');
+await browser.close();

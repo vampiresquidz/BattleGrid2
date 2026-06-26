@@ -139,6 +139,7 @@ export class BattleScene {
   private guardT = 0;            // seconds of player barrier left
   private guardCounter = 0;      // damage reflected on a successful block
   private guardFreeze = 0;       // Heat Sink: freeze dealt to whoever the barrier blocks
+  private guardKnock = 0;        // Air Filter: columns the barrier shoves a blocked attacker
   private guardSprite?: THREE.Sprite;
   private mines: Array<{ col: number; row: number; dmg: number; marker: THREE.Mesh }> = [];
   // burning tiles (Thermal Run / volcano): scorch whoever stands on them per tick
@@ -374,7 +375,7 @@ export class BattleScene {
       if (m.strip) {
         // EMP hit me: clear my buffs (shield/aura/overdrive/reflect)
         this.playerAura = 0; this.playerAuraT = 0; this.nextChipAmp = 0;
-        this.guardT = 0; this.reflectT = 0; this.guardFreeze = 0;
+        this.guardT = 0; this.reflectT = 0; this.guardFreeze = 0; this.guardKnock = 0;
         if (this.auraSprite) this.auraSprite.visible = false;
         if (this.guardSprite) this.guardSprite.visible = false;
         this.spawnEffect(this.player.position.clone(), this.waterMat, 1.3);
@@ -849,7 +850,7 @@ export class BattleScene {
         // GUARD node: raise a barrier that eats the next hit and counters.
         this.guardT = 3.0;
         this.guardCounter = chip.damage;
-        this.guardFreeze = 0;
+        this.guardFreeze = 0; this.guardKnock = 0;
         this.showGuard();
         break;
       case 'lance':
@@ -1106,7 +1107,26 @@ export class BattleScene {
         // GUARD: an icy barrier — blocks + counters AND freezes whoever strikes it.
         this.guardT = 3.0;
         this.guardCounter = chip.damage;
-        this.guardFreeze = 1.6;
+        this.guardFreeze = 1.6; this.guardKnock = 0;
+        this.showGuard();
+        break;
+      // ---- wind / air wave ----
+      case 'galeshot':
+        // CONTROL: ranged blast that shoves the foe back 2 columns on hit.
+        this.spawnProjectile('player', row, 17, chip.damage, this.waterMat, 0.9, false, 0, 2);
+        break;
+      case 'cyclone': {
+        // STRIKE: a vortex hits the foe's whole column (all rows) — no row-dodging.
+        const tc = this.enemyPos.col;
+        this.meleeTiles(Array.from({ length: ROWS }, (_, r) => [tc, r] as [number, number]), chip.damage, this.waterMat, 1.2);
+        this.knockEnemyBack(1);
+        break;
+      }
+      case 'windwall':
+        // GUARD: a wind barrier — blocks + counters AND blasts the attacker back.
+        this.guardT = 3.0;
+        this.guardCounter = chip.damage;
+        this.guardKnock = 3; this.guardFreeze = 0;
         this.showGuard();
         break;
       case 'pa':
@@ -1146,6 +1166,15 @@ export class BattleScene {
         // ABSOLUTE ZERO: hard-freeze the foe, then shatter the whole field.
         this.tryControlEnemy('freeze', 4.0);
         this.spawnEffect(this.enemy.position.clone(), this.frostMat, 2.2);
+        const tiles: Array<[number, number]> = [];
+        for (let c = 5; c < COLS; c++) for (let r = 0; r < ROWS; r++) tiles.push([c, r]);
+        this.meleeTiles(tiles, 120, this.waterMat, 1.4, true, true);
+        break;
+      }
+      case 'tempest': {
+        // TEMPEST: slam the foe to its back wall, then rake the entire field.
+        this.knockEnemyBack(5);
+        this.spawnEffect(this.enemy.position.clone(), this.waterMat, 2.2);
         const tiles: Array<[number, number]> = [];
         for (let c = 5; c < COLS; c++) for (let r = 0; r < ROWS; r++) tiles.push([c, r]);
         this.meleeTiles(tiles, 120, this.waterMat, 1.4, true, true);
@@ -1404,6 +1433,10 @@ export class BattleScene {
       this.tryControlEnemy('freeze', this.guardFreeze);
       this.spawnEffect(this.enemy.position.clone(), this.waterMat, 1.5);
       this.guardFreeze = 0;
+    }
+    if (this.guardKnock > 0) { // Air Filter: blast the attacker back on block
+      this.knockEnemyBack(this.guardKnock);
+      this.guardKnock = 0;
     }
     return true;
   }
@@ -1875,7 +1908,7 @@ export class BattleScene {
     this.clearMines();
     this.clearFires();
     this.clearStatuses();
-    this.guardT = 0; this.guardFreeze = 0; if (this.guardSprite) this.guardSprite.visible = false;
+    this.guardT = 0; this.guardFreeze = 0; this.guardKnock = 0; if (this.guardSprite) this.guardSprite.visible = false;
     this.enemyGuardT = 0; if (this.enemyGuardSprite) this.enemyGuardSprite.visible = false;
     this.charging = false; this.chargeT = 0; this.chargeConsumed = false;
     if (this.chargeSprite) this.chargeSprite.visible = false;
@@ -1923,7 +1956,7 @@ export class BattleScene {
     this.clearMines();
     this.clearFires();
     this.clearStatuses();
-    this.guardT = 0; this.guardFreeze = 0; if (this.guardSprite) this.guardSprite.visible = false;
+    this.guardT = 0; this.guardFreeze = 0; this.guardKnock = 0; if (this.guardSprite) this.guardSprite.visible = false;
     this.enemyGuardT = 0; if (this.enemyGuardSprite) this.enemyGuardSprite.visible = false;
     this.charging = false; this.chargeT = 0; this.chargeConsumed = false;
     this.playerAnim.clearOneShot(); // drop the held victory pose
