@@ -15,6 +15,10 @@ export async function runLoading(container: HTMLElement, urls: string[], opts: O
     <video class="ls-vid" autoplay loop muted playsinline></video>
     <div class="ls-grad"></div>
     <div class="ls-mid">
+      <div class="ls-spin">
+        <video class="ls-spinvid" autoplay loop muted playsinline></video>
+        <div class="ls-spinfallback"></div>
+      </div>
       <div class="ls-title">${title}</div>
       <div class="ls-label">${label}</div>
       <div class="ls-bar"><div class="ls-fill"></div></div>
@@ -27,6 +31,12 @@ export async function runLoading(container: HTMLElement, urls: string[], opts: O
   vid.onerror = () => { vid.style.display = 'none'; };
   vid.src = '/loading.mp4';
   vid.play?.().catch(() => { /* autoplay may be blocked; gradient covers it */ });
+
+  // Seedance spinner (glow on black → screen-blended). Falls back to a CSS ring.
+  const spin = el.querySelector('.ls-spinvid') as HTMLVideoElement;
+  spin.onerror = () => { spin.style.display = 'none'; el.querySelector('.ls-spinfallback')?.classList.add('show'); };
+  spin.src = '/spinner.mp4';
+  spin.play?.().catch(() => { /* autoplay blocked; the still frame still reads */ });
 
   const fill = el.querySelector('.ls-fill') as HTMLElement;
   const pct = el.querySelector('.ls-pct') as HTMLElement;
