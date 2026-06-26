@@ -41,6 +41,8 @@ import {
 import { NetClient, defaultMpUrl, type PeerState } from './net.ts';
 import { openDeckBuilder } from './deckbuilder.ts';
 import { openChipShop } from './shop.ts';
+import { openOps } from './ops.ts';
+import { initTide, getTide, getClearance, decorateName } from './tide.ts';
 
 const BOUNDS = { x: 28, z: 19 };  // expanded play area
 const SPEED = 6.4;
@@ -133,6 +135,8 @@ export class OverworldScene {
   private questEl?: HTMLElement;
   private deckOpen = false;
   private shopOpen = false;
+  private opsOpen = false;
+  private tideEl?: HTMLElement;
   private saveT = 0;
 
   // multiplayer presence
@@ -184,6 +188,7 @@ export class OverworldScene {
     this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 320);
 
     this.session = session;
+    initTide(session.address); // wallet-scoped ◊ TIDE ledger
     this.build();
     this.buildPost();
     this.buildHUD(session);
@@ -548,7 +553,7 @@ export class OverworldScene {
     net.on('accept', (m) => { if ((m.from as number) === this.challengeOutTo) this.startPvp('host', m.from as number); });
     net.on('decline', (m) => { if ((m.from as number) === this.challengeOutTo) { this.challengeOutTo = 0; this.toast('Challenge declined'); } });
     net.connect({
-      name: this.session.short || 'agent',
+      name: decorateName(this.session.short || 'agent'),
       body: getSelectedBody(), tint: tintColor(getSelectedCharacter()),
       x: this.pos.x, z: this.pos.y, facing: this.facing,
     });
@@ -788,7 +793,7 @@ export class OverworldScene {
 
     const hint = document.createElement('div');
     hint.id = 'ow-hint';
-    hint.innerHTML = `<kbd>WASD</kbd> move &nbsp; <kbd>Shift</kbd> run &nbsp; <kbd>E</kbd> interact &nbsp; <kbd>F</kbd> duel &nbsp; <kbd>C</kbd> agent &nbsp; <kbd>B</kbd> deck`;
+    hint.innerHTML = `<kbd>WASD</kbd> move &nbsp; <kbd>Shift</kbd> run &nbsp; <kbd>E</kbd> interact &nbsp; <kbd>F</kbd> duel &nbsp; <kbd>C</kbd> agent &nbsp; <kbd>B</kbd> deck &nbsp; <kbd>T</kbd> ops`;
     this.container.appendChild(hint); this.dom.push(hint);
 
     const credits = document.createElement('div');
@@ -796,6 +801,16 @@ export class OverworldScene {
     this.container.appendChild(credits); this.dom.push(credits);
     this.creditsEl = credits;
     this.updateCredits();
+
+    // ◊ TIDE balance chip (sits just under Credits)
+    const tide = document.createElement('div');
+    tide.id = 'ow-tide';
+    tide.style.cssText = 'position:fixed;top:88px;left:16px;z-index:30;font:600 14px/1 ui-monospace,monospace;color:#e3ccff;background:rgba(8,14,26,.6);border:1px solid #6b4a8f;border-radius:8px;padding:8px 12px;text-shadow:0 0 8px #b06bff;cursor:pointer';
+    tide.title = 'Daily Ops — earn & spend ◊ TIDE (T)';
+    tide.onclick = () => this.openOps();
+    this.container.appendChild(tide); this.dom.push(tide);
+    this.tideEl = tide;
+    this.updateTide();
 
     // data-shard counter
     const shard = document.createElement('div');
@@ -857,6 +872,9 @@ export class OverworldScene {
   private updateCredits() {
     if (this.creditsEl) this.creditsEl.innerHTML = `<span>◈</span> ${getCredits()}`;
   }
+  private updateTide() {
+    if (this.tideEl) { const cl = getClearance(); this.tideEl.innerHTML = `◊ ${getTide()} <span class="db-dim">· CL${cl.level}</span>`; }
+  }
   private updateShards() {
     const got = this.shards.filter((s) => s.taken).length;
     if (this.shardEl) this.shardEl.innerHTML = `◆ ${got} / ${this.shardTotal}`;
@@ -878,9 +896,20 @@ export class OverworldScene {
   }
 
   private openShop() {
-    if (this.shopOpen || this.deckOpen || this.rosterOpen || this.warpOpen || this.talking || !!this.challengeEl) return;
+    if (this.shopOpen || this.deckOpen || this.opsOpen || this.rosterOpen || this.warpOpen || this.talking || !!this.challengeEl) return;
     this.shopOpen = true;
     openChipShop(this.container, () => { this.shopOpen = false; this.updateCredits(); });
+  }
+
+  private openOps() {
+    if (this.opsOpen || this.shopOpen || this.deckOpen || this.rosterOpen || this.warpOpen || this.talking || !!this.challengeEl) return;
+    this.opsOpen = true;
+    openOps(this.container, () => { this.opsOpen = false; this.updateTide(); this.broadcastCosmetics(); });
+  }
+
+  // re-send presence with the freshly-equipped badge so peers see the flex
+  private broadcastCosmetics() {
+    this.net?.reskin({ name: decorateName(this.session.short || 'agent'), body: getSelectedBody(), tint: tintColor(getSelectedCharacter()) });
   }
 
   private openRoster() {
@@ -1067,8 +1096,9 @@ export class OverworldScene {
     this.updateActorFocus();
     this.updatePeerFocus();
     for (const code of this.fresh) {
-      if (this.deckOpen || this.shopOpen) break; // an open modal owns input
+      if (this.deckOpen || this.shopOpen || this.opsOpen) break; // an open modal owns input
       if (code === 'KeyB') this.openDeck();
+      else if (code === 'KeyT') this.openOps();
       else if (code === 'KeyC') this.toggleRoster();
       else if (code === 'Escape') {
         if (this.rosterOpen) this.closeRoster();
@@ -1093,7 +1123,7 @@ export class OverworldScene {
 
     let dir: Dir | null = null;
     let running = false;
-    if (!this.talking && !this.done && !this.rosterOpen && !this.warpOpen && !this.challengeEl && !this.deckOpen && !this.shopOpen) {
+    if (!this.talking && !this.done && !this.rosterOpen && !this.warpOpen && !this.challengeEl && !this.deckOpen && !this.shopOpen && !this.opsOpen) {
       let dx = 0, dz = 0;
       if (this.keys['KeyA'] || this.keys['ArrowLeft']) dx -= 1;
       if (this.keys['KeyD'] || this.keys['ArrowRight']) dx += 1;
@@ -1122,7 +1152,7 @@ export class OverworldScene {
     }
 
     // interaction prompt (actors take priority; else offer a duel to a nearby player)
-    if (this.deckOpen || this.shopOpen) {
+    if (this.deckOpen || this.shopOpen || this.opsOpen) {
       this.prompt.style.display = 'none';
     } else if (!this.talking && !this.rosterOpen && !this.warpOpen && !this.challengeEl && this.currentActor) {
       this.prompt.textContent = `E · ${this.currentActor.prompt()}`;

@@ -19,6 +19,7 @@ import {
   type Chip,
 } from './chips.ts';
 import { equippedEffects, type AggregatedEffects } from './navicust.ts';
+import { recordBattle } from './tide.ts';
 import type { Session } from './wallet.ts';
 
 // ---------- Grid constants ----------
@@ -1916,8 +1917,16 @@ export class BattleScene {
     // bounty: tougher foes pay out more Credits (spend them in the Agent shop)
     const reward = win ? Math.round(this.enemyHPMax / 6) : 0;
     if (reward) addCredits(reward);
-    if (win && this.encounter && !this.pvp) addWin(); // PvE wins count toward the quest
-    const bounty = reward ? `<div class="bounty">+◈ ${reward} credits</div>` : '';
+    // ◊ TIDE + quest progress: PvE encounters only (PvP isn't server-authoritative
+    // yet, so it can't be trusted for the earn economy).
+    let tideEarned = 0;
+    if (this.encounter && !this.pvp) {
+      if (win) addWin();
+      tideEarned = recordBattle(win, win && this.playerHP >= this.playerHPMax * 0.5);
+    }
+    const bounty = (reward || tideEarned)
+      ? `<div class="bounty">${reward ? `+◈ ${reward} credits` : ''}${reward && tideEarned ? ' · ' : ''}${tideEarned ? `+◊ ${tideEarned} TIDE` : ''}</div>`
+      : '';
 
     this.result.className = 'show ' + (win ? 'win' : 'lose');
     if (this.encounter) {

@@ -98,6 +98,8 @@ async function startPvp(session: Session, info: import('./overworld.ts').PvpInfo
 // otherwise we start in the overworld. Never triggers in normal use.
 const params = new URLSearchParams(location.search);
 if (params.has('dev')) {
+  // dev/QA hook: poke the ◊ TIDE economy from headless tests
+  void import('./tide.ts').then((t) => { (window as unknown as Record<string, unknown>).__tide = t; });
   const session: Session = { address: 'DEV', short: 'DEV', signature: '' };
   if (params.has('battle')) {
     const idx = Number(params.get('enemy') ?? 0);
