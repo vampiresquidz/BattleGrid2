@@ -138,6 +138,7 @@ export class BattleScene {
   // game-theory state: Aegis barrier + buried DataMines
   private guardT = 0;            // seconds of player barrier left
   private guardCounter = 0;      // damage reflected on a successful block
+  private guardFreeze = 0;       // Heat Sink: freeze dealt to whoever the barrier blocks
   private guardSprite?: THREE.Sprite;
   private mines: Array<{ col: number; row: number; dmg: number; marker: THREE.Mesh }> = [];
   // burning tiles (Thermal Run / volcano): scorch whoever stands on them per tick
@@ -373,7 +374,7 @@ export class BattleScene {
       if (m.strip) {
         // EMP hit me: clear my buffs (shield/aura/overdrive/reflect)
         this.playerAura = 0; this.playerAuraT = 0; this.nextChipAmp = 0;
-        this.guardT = 0; this.reflectT = 0;
+        this.guardT = 0; this.reflectT = 0; this.guardFreeze = 0;
         if (this.auraSprite) this.auraSprite.visible = false;
         if (this.guardSprite) this.guardSprite.visible = false;
         this.spawnEffect(this.player.position.clone(), this.waterMat, 1.3);
@@ -848,6 +849,7 @@ export class BattleScene {
         // GUARD node: raise a barrier that eats the next hit and counters.
         this.guardT = 3.0;
         this.guardCounter = chip.damage;
+        this.guardFreeze = 0;
         this.showGuard();
         break;
       case 'lance':
@@ -1086,6 +1088,27 @@ export class BattleScene {
         this.meleeTiles(tiles, chip.damage, this.boomMat, 1.5, true, true);
         break;
       }
+      // ---- ice / cryo wave ----
+      case 'iceshot':
+        // CONTROL: ranged shot that freezes the foe on an unblocked hit.
+        this.spawnProjectile('player', row, 16, chip.damage, this.waterMat, 0.9, false, 0, 0, 1.4);
+        break;
+      case 'blizzard': {
+        // CONTROL: flash-freeze a 2×3 zone ahead — damage + freeze anything caught.
+        const tiles: Array<[number, number]> = [];
+        for (let dc = 1; dc <= 2; dc++) for (let dr = -1; dr <= 1; dr++) tiles.push([fromCol + dc, row + dr]);
+        const caught = tiles.some(([c, r]) => this.enemyPos.col === c && this.enemyPos.row === r);
+        this.meleeTiles(tiles, chip.damage, this.waterMat, 1.2);
+        if (caught && this.tryControlEnemy('freeze', 1.6)) this.spawnEffect(this.enemy.position.clone(), this.waterMat, 1.6);
+        break;
+      }
+      case 'icewall':
+        // GUARD: an icy barrier — blocks + counters AND freezes whoever strikes it.
+        this.guardT = 3.0;
+        this.guardCounter = chip.damage;
+        this.guardFreeze = 1.6;
+        this.showGuard();
+        break;
       case 'pa':
         this.firePA(chip.paId!, row, fromCol);
         break;
@@ -1117,6 +1140,15 @@ export class BattleScene {
         const tiles: Array<[number, number]> = [];
         for (let c = 5; c < COLS; c++) for (let r = 0; r < ROWS; r++) tiles.push([c, r]);
         this.meleeTiles(tiles, 110, this.boomMat, 1.3, true, true);
+        break;
+      }
+      case 'abszero': {
+        // ABSOLUTE ZERO: hard-freeze the foe, then shatter the whole field.
+        this.tryControlEnemy('freeze', 4.0);
+        this.spawnEffect(this.enemy.position.clone(), this.frostMat, 2.2);
+        const tiles: Array<[number, number]> = [];
+        for (let c = 5; c < COLS; c++) for (let r = 0; r < ROWS; r++) tiles.push([c, r]);
+        this.meleeTiles(tiles, 120, this.waterMat, 1.4, true, true);
         break;
       }
     }
@@ -1367,6 +1399,11 @@ export class BattleScene {
     this.spawnEffect(this.player.position.clone(), this.guardMat, 1.8);
     if (this.guardCounter > 0) {
       this.spawnProjectile('player', this.playerPos.row, 20, this.guardCounter, this.slashMat, 0.9);
+    }
+    if (this.guardFreeze > 0) { // Heat Sink: flash-freeze the attacker on block
+      this.tryControlEnemy('freeze', this.guardFreeze);
+      this.spawnEffect(this.enemy.position.clone(), this.waterMat, 1.5);
+      this.guardFreeze = 0;
     }
     return true;
   }
@@ -1749,6 +1786,7 @@ export class BattleScene {
             this.damageEnemy(p.damage);
             if (p.heal) { this.playerHP = Math.min(this.playerHPMax, this.playerHP + p.heal); this.spawnEffect(this.player.position.clone(), this.slashMat, 0.9); this.updateHUD(); }
             if (p.knock) this.knockEnemyBack(p.knock);
+            if (p.freeze && this.tryControlEnemy('freeze', p.freeze)) this.spawnEffect(this.enemy.position.clone(), this.waterMat, 1.5);
           }
           p.alive = false;
         } else if (x > colX(COLS - 1) + 1) p.alive = false;
@@ -1837,7 +1875,7 @@ export class BattleScene {
     this.clearMines();
     this.clearFires();
     this.clearStatuses();
-    this.guardT = 0; if (this.guardSprite) this.guardSprite.visible = false;
+    this.guardT = 0; this.guardFreeze = 0; if (this.guardSprite) this.guardSprite.visible = false;
     this.enemyGuardT = 0; if (this.enemyGuardSprite) this.enemyGuardSprite.visible = false;
     this.charging = false; this.chargeT = 0; this.chargeConsumed = false;
     if (this.chargeSprite) this.chargeSprite.visible = false;
@@ -1885,7 +1923,7 @@ export class BattleScene {
     this.clearMines();
     this.clearFires();
     this.clearStatuses();
-    this.guardT = 0; if (this.guardSprite) this.guardSprite.visible = false;
+    this.guardT = 0; this.guardFreeze = 0; if (this.guardSprite) this.guardSprite.visible = false;
     this.enemyGuardT = 0; if (this.enemyGuardSprite) this.enemyGuardSprite.visible = false;
     this.charging = false; this.chargeT = 0; this.chargeConsumed = false;
     this.playerAnim.clearOneShot(); // drop the held victory pose

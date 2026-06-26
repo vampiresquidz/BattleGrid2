@@ -17,6 +17,8 @@ export type ChipKind =
   // --- unlockable wave (MMBN-inspired: earn with wins + credits) ---
   | 'antidmg' | 'holy' | 'muramasa' | 'snake' | 'geddon'
   | 'lifesword' | 'timebomb' | 'roll' | 'deltaray' | 'bassgs'
+  // --- ice / cryo wave (freeze synergy → Absolute Zero PA) ---
+  | 'iceshot' | 'blizzard' | 'icewall'
   // synthesized Program Advance op (never in a deck; built at fire time)
   | 'pa';
 
@@ -131,6 +133,13 @@ export const CHIP_DEFS: Record<ChipKind, ChipDef> = {
                rarity: 'giga', unlock: { wins: 10, cost: 800 } },
   bassgs:    { name: 'Null Reaper', kind: 'bassgs',    cls: 'breach',  damage: 130, cost: 5, icon: '☠️', desc: 'Annihilate the ENTIRE enemy field, through guards, cracking every node. (BassGS)',
                rarity: 'giga', unlock: { wins: 15, cost: 1200 } },
+  // --- ice / cryo wave: freeze synergy, fuse all three into Absolute Zero ---
+  iceshot:   { name: 'Cryo Lock',   kind: 'iceshot',   cls: 'control', damage: 40,  cost: 3, icon: '❄️', desc: 'Ranged shot that FREEZES the foe in place on an unblocked hit.',
+               unlock: { wins: 3, cost: 300 } },
+  blizzard:  { name: 'Flash Freeze',kind: 'blizzard',  cls: 'control', damage: 50,  cost: 4, icon: '🌨️', desc: 'Flash-freeze a 2×3 zone ahead — damage + freezes anything caught.',
+               rarity: 'mega', unlock: { wins: 6, cost: 450 } },
+  icewall:   { name: 'Heat Sink',   kind: 'icewall',   cls: 'guard',   damage: 40,  cost: 2, icon: '🏔️', desc: 'Icy barrier: blocks + counters AND freezes whoever strikes it.',
+               unlock: { wins: 4, cost: 350 } },
   // synthesized at fire time when a Program Advance recipe is queued — never deck-built.
   pa:        { name: 'Program Advance', kind: 'pa',    cls: 'strike',  damage: 0,   cost: 0, icon: '✴️', desc: 'A fused super-op from a chip combo.' },
 };
@@ -167,6 +176,8 @@ export const PROGRAM_ADVANCES: ProgramAdvance[] = [
     desc: 'Batch Infer ×3 → a 12-shot hyper barrage down your row.' },
   { id: 'meteorrain', name: 'Meteor Rain',  recipe: ['bomb', 'bomb', 'bomb'],       icon: '☄️',
     desc: 'Kernel Panic ×3 → bombards the ENTIRE enemy field, cracking nodes (110).' },
+  { id: 'abszero',    name: 'Absolute Zero', recipe: ['iceshot', 'blizzard', 'icewall'], icon: '🥶',
+    desc: 'Cryo Lock → Flash Freeze → Heat Sink → freeze the foe 4s and shatter the whole field (120).' },
 ];
 export function detectPA(kinds: ChipKind[]): ProgramAdvance | null {
   return PROGRAM_ADVANCES.find((pa) =>

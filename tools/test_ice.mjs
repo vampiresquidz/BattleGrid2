@@ -1,0 +1,34 @@
+import { chromium } from 'playwright';
+const browser = await chromium.launch({ channel: 'chrome', headless: true,
+  args: ['--use-gl=angle','--use-angle=swiftshader','--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const errors = [];
+page.on('pageerror', e => errors.push(String(e)));
+await page.goto('http://localhost:5175/?dev&battle&enemy=0');
+await page.waitForFunction(() => !!window.__battle, { timeout: 12000 });
+await page.waitForTimeout(700);
+const res = await page.evaluate(async () => {
+  const b = window.__battle;
+  const mk = (kind, paId) => ({ id:kind, name:kind, code:'A', kind, cls:'control', damage:50, cost:3, icon:'x', desc:'', paId });
+  const out = {};
+  const reset = (col) => { b.enemyHP=9999; b.enemyHPMax=9999; b.over=false; b.enemyFreezeT=0;
+    b.enemyPos={col, row:b.playerPos.row}; b.syncEntity(b.enemy, b.enemyPos); };
+  let hp;
+  reset(6); hp=b.enemyHP;
+  b.queue=[mk('iceshot')]; b.fireChip();
+  await new Promise(r=>setTimeout(r,700));
+  out.iceshot = { dmg: hp-b.enemyHP, frozen: +b.enemyFreezeT.toFixed(1) };
+  reset(b.playerPos.col+1); hp=b.enemyHP;
+  b.queue=[mk('blizzard')]; b.fireChip();
+  await new Promise(r=>setTimeout(r,150));
+  out.blizzard = { dmg: hp-b.enemyHP, frozen: +b.enemyFreezeT.toFixed(1) };
+  reset(7); hp=b.enemyHP;
+  b.queue=[{ id:'pa', name:'Absolute Zero', code:'*', kind:'pa', cls:'strike', damage:0, cost:0, icon:'x', desc:'', paId:'abszero' }];
+  b.fireChip();
+  await new Promise(r=>setTimeout(r,150));
+  out.abszero = { dmg: hp-b.enemyHP, frozen: +b.enemyFreezeT.toFixed(1) };
+  return out;
+});
+console.log(JSON.stringify(res));
+console.log(errors.length ? 'ERR:\n'+errors.join('\n') : 'no errors');
+await browser.close();
