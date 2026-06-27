@@ -3,14 +3,17 @@
 import {
   getTide, dayInfo, getClearance, getDailyQuests, claimQuest, rerollQuests, rerollCost,
   COSMETICS, getOwnedCosmetics, mintCosmetic, getEquip, equipCosmetic,
-  type CosmeticKind,
+  getNftAsset, recordNftMint, type CosmeticKind,
 } from './tide.ts';
+import { mintCosmeticNft } from './nft.ts';
 
 const KIND_LABEL: Record<CosmeticKind, string> = { badge: 'Badges', title: 'Titles', color: 'Name Colors' };
 const KIND_ORDER: CosmeticKind[] = ['badge', 'title', 'color'];
 
 export function openOps(container: HTMLElement, onClose?: () => void) {
   let tab: 'quests' | 'vault' = 'quests';
+  let mintingId: string | null = null; // legendary mint in flight
+  let mintMsg = '';                     // last mint error/status
 
   const el = document.createElement('div');
   el.id = 'opsmodal';
@@ -63,15 +66,30 @@ export function openOps(container: HTMLElement, onClose?: () => void) {
     const bal = getTide();
     const groups = KIND_ORDER.map((k) => {
       const cards = COSMETICS.filter((c) => c.kind === k).map((c) => {
-        const own = owned.has(c.id);
         const equipped = eq[k] === c.id;
+        const ribbon = c.nft ? '<span class="ops-nft" title="Legendary — minted as a real Solana NFT (devnet)">◆ NFT</span>' : '';
+        let state: string, attr: string, foot: string;
+        if (c.nft) {
+          // legendary: minted on-chain (devnet), not bought with ◊
+          const asset = getNftAsset(c.id);
+          const minting = mintingId === c.id;
+          state = equipped ? 'equipped' : asset ? 'owned' : 'buyable';
+          attr = minting ? '' : asset ? `data-equip="${c.id}"` : `data-mintnft="${c.id}"`;
+          foot = minting ? '⏳ Minting…' : equipped ? '✓ EQUIPPED' : asset ? 'Equip' : 'Mint NFT ◆';
+          const link = asset ? `<a class="ops-cos-link" href="https://solscan.io/token/${asset}?cluster=devnet" target="_blank" rel="noopener">view on-chain ↗</a>` : '';
+          return `<div class="ops-cos legendary ${state}${minting ? ' minting' : ''}" ${attr}>
+            ${ribbon}
+            <div class="ops-cos-ic">${icon(c)}</div>
+            <div class="ops-cos-name">${c.name.replace(/^(Title|Name Color): /, '')}</div>
+            <div class="ops-cos-btn">${foot}</div>${link}
+          </div>`;
+        }
+        const own = owned.has(c.id);
         const afford = bal >= c.price;
-        const state = equipped ? 'equipped' : own ? 'owned' : afford ? 'buyable' : 'poor';
-        const attr = own ? `data-equip="${c.id}"` : (afford ? `data-mint="${c.id}"` : '');
-        const foot = equipped ? '✓ EQUIPPED' : own ? 'Equip' : afford ? `Mint ◊${c.price}` : `◊${c.price}`;
-        const ribbon = c.nft ? '<span class="ops-nft" title="Legendary — becomes a real on-chain NFT in a later phase">◆ NFT</span>' : '';
-        return `<div class="ops-cos ${state}${c.nft ? ' legendary' : ''}" ${attr}>
-          ${ribbon}
+        state = equipped ? 'equipped' : own ? 'owned' : afford ? 'buyable' : 'poor';
+        attr = own ? `data-equip="${c.id}"` : (afford ? `data-mint="${c.id}"` : '');
+        foot = equipped ? '✓ EQUIPPED' : own ? 'Equip' : afford ? `Mint ◊${c.price}` : `◊${c.price}`;
+        return `<div class="ops-cos ${state}" ${attr}>
           <div class="ops-cos-ic">${icon(c)}</div>
           <div class="ops-cos-name">${c.name.replace(/^(Title|Name Color): /, '')}</div>
           <div class="ops-cos-btn">${foot}</div>
@@ -95,7 +113,7 @@ export function openOps(container: HTMLElement, onClose?: () => void) {
         </div>
         <div class="ops-body">${tab === 'quests' ? questsHTML() : vaultHTML()}</div>
         <div class="ops-foot">
-          <span class="db-dim">${tab === 'quests' ? 'Earn ◊ TIDE by winning. Spend it on cosmetics in the Vault.' : 'Pure flex — no effect on power. Only ◆ NFT (legendary) cosmetics become real on-chain collectibles.'}</span>
+          <span class="db-dim">${tab === 'quests' ? 'Earn ◊ TIDE by winning. Spend it on cosmetics in the Vault.' : (mintMsg || 'Pure flex — no effect on power. ◆ NFT legendaries mint as real Solana NFTs (devnet) to your wallet.')}</span>
           <span style="flex:1"></span>
           <button class="btn" data-act="close">Close · Esc</button>
         </div>
@@ -107,6 +125,20 @@ export function openOps(container: HTMLElement, onClose?: () => void) {
     if (rr) rr.onclick = () => { rerollQuests(); render(); };
     el.querySelectorAll('[data-mint]').forEach((n) => (n as HTMLElement).onclick = () => { mintCosmetic((n as HTMLElement).dataset.mint!); render(); });
     el.querySelectorAll('[data-equip]').forEach((n) => (n as HTMLElement).onclick = () => { equipCosmetic((n as HTMLElement).dataset.equip!); render(); });
+    el.querySelectorAll('[data-mintnft]').forEach((n) => (n as HTMLElement).onclick = async () => {
+      if (mintingId) return; // one at a time
+      const id = (n as HTMLElement).dataset.mintnft!;
+      mintingId = id; mintMsg = 'Approve the mint in Phantom…'; render();
+      try {
+        const res = await mintCosmeticNft(id);
+        recordNftMint(id, res.asset);
+        mintMsg = `✓ Minted on-chain · ${res.asset.slice(0, 4)}…${res.asset.slice(-4)}`;
+      } catch (e) {
+        mintMsg = '⚠ ' + ((e as Error).message || 'Mint failed.');
+      } finally {
+        mintingId = null; render();
+      }
+    });
     (el.querySelector('[data-act="close"]') as HTMLElement).onclick = () => close();
   };
 

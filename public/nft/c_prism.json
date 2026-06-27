@@ -1,0 +1,16 @@
+{
+  "name": "Abyssal Grid — Prismatic Sigil",
+  "symbol": "ABYSS",
+  "description": "Legendary cosmetic from Abyssal Grid. The Prismatic name color shimmers across the spectrum. Cosmetic only; no effect on power.",
+  "image": "https://battlegrid2-hxo2u.ondigitalocean.app/nft/legendary.png",
+  "external_url": "https://battlegrid2-hxo2u.ondigitalocean.app",
+  "attributes": [
+    { "trait_type": "Tier", "value": "Legendary" },
+    { "trait_type": "Kind", "value": "Name Color" },
+    { "trait_type": "Hue", "value": "Prismatic" }
+  ],
+  "properties": {
+    "category": "image",
+    "files": [{ "uri": "https://battlegrid2-hxo2u.ondigitalocean.app/nft/legendary.png", "type": "image/png" }]
+  }
+}

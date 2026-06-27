@@ -1,3 +1,6 @@
+// Buffer polyfill for the Solana/Metaplex libs (used lazily by the NFT mint flow)
+import { Buffer } from 'buffer';
+(globalThis as unknown as { Buffer: typeof Buffer }).Buffer ??= Buffer;
 import './style.css';
 import { BattleScene } from './battle.ts';
 import { OverworldScene } from './overworld.ts';

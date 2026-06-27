@@ -29,6 +29,7 @@ interface Wallet {
   rerollSeed: number;     // bumped each paid reroll → new deterministic board
   owned: string[];        // cosmetics in the vault
   equip: { title?: string; badge?: string; color?: string };
+  nftAssets?: Record<string, string>; // legendary cosmetic id → on-chain asset address
 }
 interface Store { active: string; wallets: Record<string, Wallet> }
 
@@ -213,12 +214,25 @@ export function ownsCosmetic(id: string): boolean { return cur().owned.includes(
 export function mintCosmetic(id: string): boolean {
   const c = COSMETICS.find((x) => x.id === id);
   const w = cur();
-  if (!c || w.owned.includes(id) || w.balance < c.price) return false;
+  // legendary (nft) cosmetics are minted on-chain, not bought with ◊
+  if (!c || c.nft || w.owned.includes(id) || w.balance < c.price) return false;
   w.balance -= c.price; w.owned.push(id);
   // auto-equip the first of each kind you buy
   if (!w.equip[c.kind]) w.equip[c.kind] = id;
   save();
   return true;
+}
+
+// record a successful on-chain mint of a legendary cosmetic
+export function getNftAsset(id: string): string | undefined { return cur().nftAssets?.[id]; }
+export function recordNftMint(id: string, asset: string): void {
+  const c = COSMETICS.find((x) => x.id === id);
+  const w = cur();
+  if (!c) return;
+  (w.nftAssets ??= {})[id] = asset;
+  if (!w.owned.includes(id)) w.owned.push(id);
+  if (!w.equip[c.kind]) w.equip[c.kind] = id; // auto-equip your new legendary
+  save();
 }
 export function getEquip(): { title?: string; badge?: string; color?: string } { return { ...cur().equip }; }
 export function equipCosmetic(id: string): void {

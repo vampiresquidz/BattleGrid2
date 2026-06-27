@@ -1,0 +1,16 @@
+{
+  "name": "Abyssal Grid — Apex Badge",
+  "symbol": "ABYSS",
+  "description": "Legendary cosmetic from Abyssal Grid. The Apex Badge marks an apex process — a crown worn before your name across the grid. Cosmetic only; no effect on power.",
+  "image": "https://battlegrid2-hxo2u.ondigitalocean.app/nft/legendary.png",
+  "external_url": "https://battlegrid2-hxo2u.ondigitalocean.app",
+  "attributes": [
+    { "trait_type": "Tier", "value": "Legendary" },
+    { "trait_type": "Kind", "value": "Badge" },
+    { "trait_type": "Glyph", "value": "Crown" }
+  ],
+  "properties": {
+    "category": "image",
+    "files": [{ "uri": "https://battlegrid2-hxo2u.ondigitalocean.app/nft/legendary.png", "type": "image/png" }]
+  }
+}

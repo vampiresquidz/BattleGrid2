@@ -1,0 +1,16 @@
+{
+  "name": "Abyssal Grid — Apex Process",
+  "symbol": "ABYSS",
+  "description": "Legendary cosmetic from Abyssal Grid. The Apex Process title is reserved for the grid's elite. Cosmetic only; no effect on power.",
+  "image": "https://battlegrid2-hxo2u.ondigitalocean.app/nft/legendary.png",
+  "external_url": "https://battlegrid2-hxo2u.ondigitalocean.app",
+  "attributes": [
+    { "trait_type": "Tier", "value": "Legendary" },
+    { "trait_type": "Kind", "value": "Title" },
+    { "trait_type": "Title", "value": "Apex Process" }
+  ],
+  "properties": {
+    "category": "image",
+    "files": [{ "uri": "https://battlegrid2-hxo2u.ondigitalocean.app/nft/legendary.png", "type": "image/png" }]
+  }
+}
