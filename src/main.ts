@@ -9,6 +9,7 @@ import { runLoading } from './loadingScreen.ts';
 import { OVERWORLD_ASSETS, battleAssetsFor } from './loader.ts';
 import { getSelectedBody } from './characters.ts';
 import { setTouchMode } from './touch.ts';
+import { startGuestMode, GUEST_SESSION } from './guest.ts';
 
 const app = document.getElementById('app')!;
 
@@ -36,12 +37,20 @@ function showLogin() {
     <h1>ABYSSAL&nbsp;GRID</h1>
     <p>An HD-2D grid battler on an alien data-world. Build a folder of chips, dive in, and delete what comes at you.</p>
     <button class="btn" id="connect">${installed ? 'Connect Phantom' : 'Get Phantom Wallet'}</button>
+    <button class="btn btn-ghost" id="guest">Play as Guest</button>
     <div class="status" id="status"></div>
-    <div class="hint">${installed ? 'You\'ll sign a free message to log in — no transaction, no fees.' : 'Phantom not detected in this browser.'}</div>`;
+    <div class="hint">${installed ? 'You\'ll sign a free message to log in — no transaction, no fees.' : 'Phantom not detected in this browser.'}</div>
+    <div class="hint">Guest mode lets you play instantly — but nothing is saved (no credits, ◊ TIDE, decks or NFTs).</div>`;
   app.appendChild(screen);
 
   const btn = screen.querySelector('#connect') as HTMLButtonElement;
   const status = screen.querySelector('#status') as HTMLElement;
+
+  (screen.querySelector('#guest') as HTMLButtonElement).onclick = () => {
+    startGuestMode();
+    screen.remove();
+    showOverworld(GUEST_SESSION);
+  };
 
   btn.onclick = async () => {
     if (!isPhantomInstalled()) {

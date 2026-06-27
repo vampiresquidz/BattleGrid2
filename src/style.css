@@ -54,6 +54,8 @@ canvas { display: block; }
 }
 .btn:hover { background: rgba(79, 227, 208, 0.2); box-shadow: 0 0 18px rgba(79,227,208,0.4); }
 .btn:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
+.btn-ghost { border-color: rgba(159,255,176,0.6); color: #9effb0; background: rgba(159,255,176,0.06); }
+.btn-ghost:hover { background: rgba(159,255,176,0.16); box-shadow: 0 0 18px rgba(159,255,176,0.35); }
 #login .hint { font-size: 0.8rem; opacity: 0.5; }
 #login .status { min-height: 1.2rem; color: var(--gold); font-size: 0.9rem; }
 
