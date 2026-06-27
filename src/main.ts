@@ -8,8 +8,25 @@ import { login, isPhantomInstalled, tryEagerConnect, type Session } from './wall
 import { runLoading } from './loadingScreen.ts';
 import { OVERWORLD_ASSETS, battleAssetsFor } from './loader.ts';
 import { getSelectedBody } from './characters.ts';
+import { setTouchMode } from './touch.ts';
 
 const app = document.getElementById('app')!;
+
+// ---- PWA: install the service worker + offer an "Install" button ----
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+}
+let deferredInstall: { prompt: () => void; userChoice?: Promise<unknown> } | null = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstall = e as unknown as typeof deferredInstall;
+  const btn = document.createElement('button');
+  btn.id = 'pwa-install';
+  btn.className = 'btn';
+  btn.textContent = '⤓ Install';
+  btn.onclick = () => { deferredInstall?.prompt(); btn.remove(); deferredInstall = null; };
+  document.body.appendChild(btn);
+});
 
 function showLogin() {
   const screen = document.createElement('div');
@@ -61,6 +78,7 @@ async function showOverworld(session: Session, label = 'Loading sector…') {
   // On return everything's cached so this resolves instantly; the small floor just
   // avoids a sub-frame flash.
   await runLoading(app, OVERWORLD_ASSETS, { title: 'ABYSSAL&nbsp;GRID', label, minMs: 400 });
+  setTouchMode('overworld');
   overworld = new OverworldScene(app, session, {
     onEncounter: (enemyIndex) => startEncounter(session, enemyIndex),
     onPvp: (info) => startPvp(session, info),
@@ -74,6 +92,7 @@ async function startEncounter(session: Session, enemyIndex: number) {
   // 100 MB battle set, which made every battle stall on the no-CDN host.
   const assets = battleAssetsFor(enemyIndex, [getSelectedBody()]);
   await runLoading(app, assets, { title: 'ENGAGING', label: 'Compiling combat node…', minMs: 300 });
+  setTouchMode('battle');
   new BattleScene(app, session, {
     startIndex: enemyIndex,
     encounter: true,
@@ -89,6 +108,7 @@ async function startPvp(session: Session, info: import('./overworld.ts').PvpInfo
   // no roster enemy — just the two combatant bodies' battle sheets
   const assets = battleAssetsFor(null, [getSelectedBody(), info.oppBody]);
   await runLoading(app, assets, { title: 'DUEL', label: 'Syncing opponent…', minMs: 300 });
+  setTouchMode('battle');
   new BattleScene(app, session, {
     encounter: true,
     pvp: info,
@@ -107,7 +127,7 @@ if (params.has('dev')) {
   if (params.has('battle')) {
     const idx = Number(params.get('enemy') ?? 0);
     runLoading(app, battleAssetsFor(idx, [getSelectedBody()]), { title: 'ENGAGING', label: 'Compiling combat node…', minMs: 300 })
-      .then(() => new BattleScene(app, session, { startIndex: idx }));
+      .then(() => { setTouchMode('battle'); return new BattleScene(app, session, { startIndex: idx }); });
   } else { void showOverworld(session); }
 } else {
   showLogin();

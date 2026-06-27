@@ -585,3 +585,60 @@ kbd {
 .db-filt b { color: var(--fc); }
 .db-filt:hover { border-color: var(--fc); color: #dfe9ff; }
 .db-filt.on { border-color: var(--fc); color: #fff; box-shadow: inset 0 0 0 1px var(--fc); }
+
+/* ---------------- Mobile: touch controls + PWA install ---------------- */
+#pwa-install { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 90;
+  font-size: 12px; letter-spacing: .06em; padding: 7px 14px; }
+
+#touch-controls { position: fixed; inset: 0; z-index: 60; display: none; pointer-events: none;
+  -webkit-user-select: none; user-select: none; }
+.tc-btn { pointer-events: auto; touch-action: none; -webkit-user-select: none; user-select: none;
+  display: flex; align-items: center; justify-content: center;
+  font: 800 16px/1 ui-monospace, monospace; color: #cfe6ff; background: rgba(10,18,34,.5);
+  border: 1px solid #3a6f9f; border-radius: 50%; box-shadow: 0 0 12px rgba(57,208,255,.18);
+  backdrop-filter: blur(2px); }
+.tc-btn.on { background: rgba(57,208,255,.35); color: #fff; border-color: #8fe3ff; }
+/* d-pad */
+.tc-dpad { position: absolute; left: calc(env(safe-area-inset-left, 0px) + 22px); bottom: calc(env(safe-area-inset-bottom, 0px) + 26px);
+  width: 168px; height: 168px; }
+.tc-dpad .tc-btn { position: absolute; width: 56px; height: 56px; border-radius: 14px; }
+.tc-up { top: 0; left: 56px; } .tc-down { bottom: 0; left: 56px; }
+.tc-left { left: 0; top: 56px; } .tc-right { right: 0; top: 56px; }
+/* action cluster */
+.tc-actions { position: absolute; right: calc(env(safe-area-inset-right, 0px) + 22px); bottom: calc(env(safe-area-inset-bottom, 0px) + 30px);
+  display: flex; flex-direction: column-reverse; align-items: center; gap: 14px; pointer-events: none; }
+.tc-actions .tc-btn { width: 66px; height: 66px; }
+.tc-buster { width: 84px !important; height: 84px !important; font-size: 30px !important;
+  color: #ffd0d0 !important; border-color: #ff6b8f !important; background: rgba(40,12,20,.55) !important;
+  box-shadow: 0 0 16px rgba(255,107,143,.3) !important; }
+.tc-buster.on { background: rgba(255,107,143,.4) !important; color: #fff !important; }
+.tc-fire { color: #9effb0 !important; border-color: #4ec98f !important; }
+.tc-chip, .tc-a, .tc-b, .tc-run { font-size: 13px !important; }
+.tc-run.on { background: rgba(255,216,107,.35) !important; border-color: #ffd86b !important; color: #1a1400 !important; }
+
+/* hide keyboard-only hints on touch builds */
+body.touch #ow-hint, body.touch #controls { display: none !important; }
+
+/* ---------------- Responsive layout (small screens) ---------------- */
+@media (max-width: 860px) {
+  /* keep HUD chips compact so they don't collide with controls */
+  #ow-credits, #ow-tide, #ow-shards, #ow-online, #ow-quest { font-size: 12px !important; padding: 6px 9px !important; }
+  #ow-roster-btn, #ow-credits { top: 12px !important; }
+  #ow-roster-btn { right: 12px !important; }
+  /* modals fill the screen */
+  .db-panel, .shop-panel, .ops-panel, .roster-panel {
+    width: 96vw !important; max-width: 96vw !important; max-height: 92vh !important; padding: 12px !important; border-radius: 12px !important; }
+  .db-body { grid-template-columns: 1fr !important; }
+  .db-grid, .shop-grid, .ops-cosgrid, .db-proggrid { grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)) !important; }
+  .db-head h2, .shop-head h2, .ops-head h2, .roster-panel h2 { font-size: 16px !important; }
+  .cw-panel { width: 94vw !important; }
+  .cw-hand { flex-wrap: wrap !important; }
+  /* login */
+  #login { padding: 24px !important; }
+  #login h1 { font-size: 34px !important; }
+}
+@media (max-width: 560px) {
+  .db-grid, .shop-grid, .ops-cosgrid, .db-proggrid { grid-template-columns: repeat(2, 1fr) !important; }
+  .tc-dpad { transform: scale(.9); transform-origin: bottom left; }
+  .tc-actions { transform: scale(.92); transform-origin: bottom right; }
+}
