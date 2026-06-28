@@ -114,7 +114,7 @@ export function openOps(container: HTMLElement, onClose?: () => void) {
         </div>
         <div class="ops-body">${tab === 'quests' ? questsHTML() : vaultHTML()}</div>
         <div class="ops-foot">
-          <span class="db-dim">${tab === 'quests' ? 'Earn ◊ TIDE by winning. Spend it on cosmetics in the Vault.' : (mintMsg || 'Pure flex — no effect on power. ◆ NFT legendaries mint as real Solana NFTs (devnet) to your wallet.')}</span>
+          <span class="db-dim">${tab === 'quests' ? 'Earn ◊ FLUX by winning. Spend it on cosmetics in the Vault.' : (mintMsg || 'Pure flex — no effect on power. ◆ NFT legendaries mint as real Solana NFTs (devnet) to your wallet.')}</span>
           <span style="flex:1"></span>
           <button class="btn" data-act="close">Close · Esc</button>
         </div>

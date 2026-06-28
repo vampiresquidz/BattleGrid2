@@ -354,7 +354,7 @@ export class OverworldScene {
     this.addActor(arch, -4, 11, 1.5, 2.8,
       () => 'Talk to the Archivist',
       () => this.startDialogue([
-        'Archivist: "Fragments of a deleted index drift across the flats."',
+        'Archivist: "Fragments of a deleted index drift across the sectors."',
         `"Recover all ${this.shardTotal} data-shards and the cache they unlock is... generous."`,
         '"The outer grid and deep sectors hide the rest. Mind the storms."',
       ]));
@@ -808,7 +808,7 @@ export class OverworldScene {
     const tide = document.createElement('div');
     tide.id = 'ow-tide';
     tide.style.cssText = 'position:fixed;top:88px;left:16px;z-index:30;font:600 14px/1 ui-monospace,monospace;color:#e3ccff;background:rgba(8,14,26,.6);border:1px solid #6b4a8f;border-radius:8px;padding:8px 12px;text-shadow:0 0 8px #b06bff;cursor:pointer';
-    tide.title = 'Daily Ops — earn & spend ◊ TIDE (T)';
+    tide.title = 'Daily Ops — earn & spend ◊ FLUX (T)';
     tide.onclick = () => this.openOps();
     this.container.appendChild(tide); this.dom.push(tide);
     this.tideEl = tide;

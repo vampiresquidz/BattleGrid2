@@ -92,14 +92,14 @@ export const CHIP_DEFS: Record<ChipKind, ChipDef> = {
   // --- expanded chip set (wide melee / rapid fire / displacement / zoning) ---
   wsword:    { name: 'Tensor Slash',kind: 'wsword',     cls: 'strike',  damage: 75,  cost: 3, icon: '⚔️', desc: 'Wide slash: the node ahead and the two beside it.' },
   gatling:   { name: 'Token Stream',kind: 'gatling',    cls: 'tempo',   damage: 14,  cost: 3, icon: '🪙', desc: 'Rapid 6-token barrage straight down your row.' },
-  water:     { name: 'Cache Flush', kind: 'water',      cls: 'control', damage: 50,  cost: 2, icon: '💧', desc: 'Pressurized blast — damages and shoves the enemy back.' },
+  water:     { name: 'Cache Flush', kind: 'water',      cls: 'control', damage: 50,  cost: 2, icon: '♻️', desc: 'Purges the buffer — damages and shoves the enemy back a column.' },
   volcano:   { name: 'Thermal Run', kind: 'volcano',    cls: 'control', damage: 25,  cost: 3, icon: '🌋', desc: 'Ignite a node ahead; it scorches anyone on it each tick.' },
   // --- setup / synergy chips (build-around archetypes) ---
   freeze:    { name: 'Deadlock',    kind: 'freeze',     cls: 'control', damage: 20,  cost: 3, icon: '🧊', desc: 'Lock the enemy in place 1.6s — slow ops can\'t be dodged.' },
   mark:      { name: 'Exploit Tag', kind: 'mark',       cls: 'control', damage: 10,  cost: 2, icon: '🎯', desc: 'Tag the target: it takes +50% from your hits for 4s.' },
   amp:       { name: 'Overdrive',   kind: 'amp',        cls: 'tempo',   damage: 0,   cost: 2, icon: '🔆', desc: 'Supercharge your NEXT op for +80% damage.' },
   aura:      { name: 'Sentinel',    kind: 'aura',       cls: 'guard',   damage: 80,  cost: 3, icon: '🧿', desc: 'Aura soaks up to 80 incoming damage over 5s.' },
-  riptide:   { name: 'Backpressure',kind: 'riptide',    cls: 'strike',  damage: 40,  cost: 3, icon: '🌊', desc: 'Row shot; +40 vs an enemy pinned to its back columns.' },
+  riptide:   { name: 'Backpressure',kind: 'riptide',    cls: 'strike',  damage: 40,  cost: 3, icon: '⏪', desc: 'Row shot; +40 vs an enemy pinned to its back columns.' },
   slow:      { name: 'Throttle Core',kind: 'slow',      cls: 'tempo',   damage: 10,  cost: 3, icon: '🐌', desc: 'Halve the enemy\'s action speed for 4s — out-tempo it.' },
   cleanse:   { name: 'Rollback',    kind: 'cleanse',    cls: 'support', damage: 0,   cost: 2, icon: '🧹', desc: 'Purge your debuffs and resist new ones for 3s.' },
   // --- tech / recounter wave: deck-building answers to whole archetypes ---

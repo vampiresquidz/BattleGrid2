@@ -10,11 +10,11 @@ from seedance import load_key, upload, poll, find_video, API
 SEED = Path("assets/raw/landing_seed.png")
 OUT = Path("public/landing.mp4")
 PROMPT = (
-    "Gentle ambient underwater motion in a serene pixel-art abyss: tall kelp sways "
-    "slowly side to side, bioluminescent plankton and bubbles drift upward, soft "
-    "god-ray light shafts shimmer and slowly move, the distant data-shrine glows and "
-    "softly pulses, faint drifting current. Seamless looping motion, no camera cut, "
-    "no zoom, pixel-art style preserved, calm and atmospheric."
+    "Gentle ambient motion in a serene neon digital world: rivers of light-energy "
+    "flow slowly along the glowing circuit grid, holographic glyphs and data particles "
+    "drift and twinkle, soft light beams shimmer, the distant data-citadel glows and "
+    "softly pulses, faint scanline shimmer. Seamless looping motion, no camera cut, "
+    "no zoom, pixel-art style preserved, calm and atmospheric. No water."
 )
 
 def submit_wide(key, urls, prompt):

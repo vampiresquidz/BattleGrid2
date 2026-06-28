@@ -1934,14 +1934,14 @@ export class BattleScene {
       tideEarned = recordBattle(win, win && this.playerHP >= this.playerHPMax * 0.5);
     }
     const bounty = (reward || tideEarned)
-      ? `<div class="bounty">${reward ? `+◈ ${reward} credits` : ''}${reward && tideEarned ? ' · ' : ''}${tideEarned ? `+◊ ${tideEarned} TIDE` : ''}</div>`
+      ? `<div class="bounty">${reward ? `+◈ ${reward} credits` : ''}${reward && tideEarned ? ' · ' : ''}${tideEarned ? `+◊ ${tideEarned} FLUX` : ''}</div>`
       : '';
 
     this.result.className = 'show ' + (win ? 'win' : 'lose');
     if (this.encounter) {
       this.result.innerHTML = `
         <h1>${win ? 'VICTORY' : 'DELETED'}</h1>
-        <p>${win ? 'The intruder is data now.' : 'You wash back to the hollow…'}</p>
+        <p>${win ? 'The intruder is data now.' : 'Your process is purged from the node…'}</p>
         ${bounty}
         <button class="btn" id="leave">Return to map</button>`;
       (this.result.querySelector('#leave') as HTMLElement).onclick = () => {
@@ -1951,7 +1951,7 @@ export class BattleScene {
     } else {
       this.result.innerHTML = `
         <h1>${win ? 'VICTORY' : 'DELETED'}</h1>
-        <p>${win ? 'Deleted. Next challenger approaches…' : 'Your signal was lost to the abyss.'}</p>
+        <p>${win ? 'Deleted. Next challenger approaches…' : 'Your signal dissolves into static.'}</p>
         ${bounty}
         <button class="btn" id="again">${win ? 'Next opponent' : 'Rematch'}</button>`;
       (this.result.querySelector('#again') as HTMLElement).onclick = () => this.reset();

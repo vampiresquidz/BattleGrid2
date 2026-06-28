@@ -190,7 +190,7 @@ export type CosmeticKind = 'title' | 'badge' | 'color';
 export interface Cosmetic { id: string; kind: CosmeticKind; name: string; price: number; value: string; nft?: boolean }
 export const COSMETICS: Cosmetic[] = [
   // badges (shown before your name to other players)
-  { id: 'b_wave',  kind: 'badge', name: 'Tidecaller Badge', price: 60,  value: '🌊' },
+  { id: 'b_wave',  kind: 'badge', name: 'Datastream Badge', price: 60,  value: '💠' },
   { id: 'b_skull', kind: 'badge', name: 'Reaper Badge',     price: 90,  value: '☠️' },
   { id: 'b_snow',  kind: 'badge', name: 'Cryo Badge',       price: 90,  value: '❄️' },
   { id: 'b_bolt',  kind: 'badge', name: 'Overclock Badge',  price: 120, value: '⚡' },

@@ -46,7 +46,7 @@ function showLogin() {
         <span class="lg-1">ABYSSAL</span>
         <span class="lg-2">GRID</span>
       </div>
-      <p class="landing-tag">An HD-2D grid battler on an alien data-world. Build a folder of chips, dive in, and delete what comes at you.</p>
+      <p class="landing-tag">An HD-2D grid battler in a digital agent world. Build a folder of chips, jack in, and delete what comes at you.</p>
       <div class="landing-menu">
         <button class="menu-btn primary" id="connect">${connectLabel}</button>
         <button class="menu-btn" id="guest">Play as Guest</button>

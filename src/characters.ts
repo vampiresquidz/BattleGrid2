@@ -46,7 +46,7 @@ export function setSelectedBody(id: AgentBody): void {
 export const CHARACTERS: CharacterDef[] = [
   { id: 'proxy', name: 'PROXY.0', desc: 'Standard-issue agent shell. Reliable, unremarkable, yours.', cost: 0,
     palette: { body: '#9aa3ad', trim: '#d3d9df', dark: '#363b42', eye: '#67e0ff' } },
-  { id: 'tide', name: 'TIDE', desc: 'A coolant-cooled netrunner. Runs calm under load.', cost: 120,
+  { id: 'tide', name: 'COOLANT', desc: 'A coolant-cooled netrunner. Runs calm under load.', cost: 120,
     palette: { body: '#3f7ad8', trim: '#9cc6ff', dark: '#152848', eye: '#cdf2ff' } },
   { id: 'ember', name: 'EMBER', desc: 'Overclocked and unafraid of the thermals.', cost: 150,
     palette: { body: '#d8483f', trim: '#ff9d88', dark: '#481513', eye: '#ffd877' } },
