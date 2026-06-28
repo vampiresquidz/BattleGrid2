@@ -17,7 +17,7 @@ export function initSfx() {
   if (ready) return;
   ready = true;
   for (const n of NAMES) {
-    const a = new Audio(`/sfx/${n}.mp3`);
+    const a = new Audio(`/sfx/${n}.mp3?v=1`); // version → cache-bust on updates
     a.preload = 'auto';
     bank[n] = a;
   }
