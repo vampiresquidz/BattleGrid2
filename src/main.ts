@@ -14,6 +14,7 @@ import { isMobile, connectPhantomMobile, handleMobileRedirect } from './walletMo
 import { reownEnabled, connectReown } from './reown.ts';
 import { initSfx, playSfx } from './sfx.ts';
 import { initPwa } from './pwa.ts';
+import { openSettings } from './settings.ts';
 
 const app = document.getElementById('app')!;
 
@@ -36,19 +37,42 @@ function showLogin() {
   const mobile = isMobile();
   // Label: injected wallet → sign; mobile (no injection) → deeplink to the app; desktop → install.
   const connectLabel = installed ? 'Connect Phantom' : mobile ? 'Connect Phantom (app)' : 'Get Phantom Wallet';
-  const wcBtn = reownEnabled() ? '<button class="btn btn-ghost" id="wc">Connect a Wallet</button>' : '';
+  const wcBtn = reownEnabled() ? '<button class="menu-btn" id="wc">Connect a Wallet</button>' : '';
   screen.innerHTML = `
-    <h1>ABYSSAL&nbsp;GRID</h1>
-    <p>An HD-2D grid battler on an alien data-world. Build a folder of chips, dive in, and delete what comes at you.</p>
-    <button class="btn" id="connect">${connectLabel}</button>
-    ${wcBtn}
-    <button class="btn btn-ghost" id="guest">Play as Guest</button>
-    <div class="status" id="status"></div>
-    <div class="hint">${installed ? 'You\'ll sign a free message to log in — no transaction, no fees.'
-      : mobile ? 'Opens the Phantom app to connect — no in-app browser needed.'
-      : 'Phantom not detected in this browser.'}</div>
-    <div class="hint">Guest mode lets you play instantly — but nothing is saved (no credits, ◊ TIDE, decks or NFTs).</div>`;
+    <video class="landing-bg" autoplay loop muted playsinline></video>
+    <div class="landing-scrim"></div>
+    <div class="landing-content">
+      <div class="landing-logo">
+        <span class="lg-1">ABYSSAL</span>
+        <span class="lg-2">GRID</span>
+      </div>
+      <p class="landing-tag">An HD-2D grid battler on an alien data-world. Build a folder of chips, dive in, and delete what comes at you.</p>
+      <div class="landing-menu">
+        <button class="menu-btn primary" id="connect">${connectLabel}</button>
+        <button class="menu-btn" id="guest">Play as Guest</button>
+        ${wcBtn}
+        <button class="menu-btn" id="settings">Settings</button>
+      </div>
+      <div class="status" id="status"></div>
+      <div class="hint">${installed ? 'You\'ll sign a free message to log in — no transaction, no fees.'
+        : mobile ? 'Tap Connect Phantom to open the app — no in-app browser needed.'
+        : 'Connect Phantom to save progress, or play instantly as a guest.'}</div>
+    </div>
+    <div class="landing-ver">v0.0.1 · simulated economy</div>
+    <div class="landing-social">
+      <a class="social-btn" href="https://github.com/vampiresquidz/BattleGrid2" target="_blank" rel="noopener" title="Source on GitHub" aria-label="GitHub">
+        <svg viewBox="0 0 16 16" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+      </a>
+    </div>`;
   app.appendChild(screen);
+
+  // animated pixel-art background (falls back to the CSS gradient if absent)
+  const bg = screen.querySelector('.landing-bg') as HTMLVideoElement;
+  bg.onerror = () => { bg.style.display = 'none'; };
+  bg.src = '/landing.mp4';
+  bg.play?.().catch(() => { /* autoplay may need a gesture; gradient covers it */ });
+
+  (screen.querySelector('#settings') as HTMLButtonElement).onclick = () => openSettings(app, null);
 
   const btn = screen.querySelector('#connect') as HTMLButtonElement;
   const status = screen.querySelector('#status') as HTMLElement;

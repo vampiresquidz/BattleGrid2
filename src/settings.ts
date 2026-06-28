@@ -4,7 +4,7 @@ import { isMobile } from './walletMobile.ts';
 import { canInstallPrompt, promptInstall, isStandalone, isIOS } from './pwa.ts';
 import type { Session } from './wallet.ts';
 
-export function openSettings(container: HTMLElement, session: Session, onClose?: () => void) {
+export function openSettings(container: HTMLElement, session: Session | null, onClose?: () => void) {
   const el = document.createElement('div');
   el.id = 'settings';
   el.style.cssText = 'position:fixed;inset:0;z-index:85;display:flex;align-items:center;justify-content:center;background:rgba(4,8,18,.82);font:13px/1.5 ui-monospace,monospace;color:#dfe9ff';
@@ -29,7 +29,9 @@ export function openSettings(container: HTMLElement, session: Session, onClose?:
       }
     }
 
-    const acct = session.address === 'guest' ? 'Guest (nothing saved)' : session.short;
+    const acctRows = session ? `
+          <div class="set-row"><span>Account</span><span class="set-val">${session.address === 'guest' ? 'Guest (nothing saved)' : session.short}</span></div>
+          <div class="set-row"><span></span><button class="btn set-btn" data-act="logout">Log out</button></div>` : '';
 
     el.innerHTML = `
       <div class="set-panel">
@@ -43,8 +45,7 @@ export function openSettings(container: HTMLElement, session: Session, onClose?:
             </div>
           </div>
           ${installRow}
-          <div class="set-row"><span>Account</span><span class="set-val">${acct}</span></div>
-          <div class="set-row"><span></span><button class="btn set-btn" data-act="logout">Log out</button></div>
+          ${acctRows}
         </div>
         <div class="set-foot">
           <span class="set-hint">Abyssal Grid</span><span style="flex:1"></span>
@@ -59,7 +60,8 @@ export function openSettings(container: HTMLElement, session: Session, onClose?:
     vol.onchange = () => playSfx('ui_confirm', 0.7); // preview at the new level
     const inst = el.querySelector('[data-act="install"]') as HTMLElement | null;
     if (inst) inst.onclick = async () => { await promptInstall(); render(); };
-    (el.querySelector('[data-act="logout"]') as HTMLElement).onclick = () => { location.href = location.pathname; };
+    const logout = el.querySelector('[data-act="logout"]') as HTMLElement | null;
+    if (logout) logout.onclick = () => { location.href = location.pathname; };
     (el.querySelector('[data-act="close"]') as HTMLElement).onclick = () => close();
   };
   render();
