@@ -13,6 +13,7 @@ import { startGuestMode, GUEST_SESSION } from './guest.ts';
 import { isMobile, connectPhantomMobile, handleMobileRedirect } from './walletMobile.ts';
 import { reownEnabled, connectReown } from './reown.ts';
 import { initSfx, playSfx } from './sfx.ts';
+import { initPwa } from './pwa.ts';
 
 const app = document.getElementById('app')!;
 
@@ -25,21 +26,8 @@ document.addEventListener('pointerdown', (e) => {
   }
 }, true);
 
-// ---- PWA: install the service worker + offer an "Install" button ----
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
-}
-let deferredInstall: { prompt: () => void; userChoice?: Promise<unknown> } | null = null;
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredInstall = e as unknown as typeof deferredInstall;
-  const btn = document.createElement('button');
-  btn.id = 'pwa-install';
-  btn.className = 'btn';
-  btn.textContent = '⤓ Install';
-  btn.onclick = () => { deferredInstall?.prompt(); btn.remove(); deferredInstall = null; };
-  document.body.appendChild(btn);
-});
+// PWA: register the SW + capture the install prompt (install lives in Settings)
+initPwa();
 
 function showLogin() {
   const screen = document.createElement('div');

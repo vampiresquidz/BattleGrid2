@@ -644,3 +644,17 @@ body.touch #ow-hint, body.touch #controls { display: none !important; }
   .tc-dpad { transform: scale(.9); transform-origin: bottom left; }
   .tc-actions { transform: scale(.92); transform-origin: bottom right; }
 }
+
+/* ---------------- Settings menu ---------------- */
+.set-panel { width: min(440px, 92vw); display: flex; flex-direction: column;
+  background: linear-gradient(180deg,#0c1226,#0a1020); border: 1px solid #2a3f6b; border-radius: 14px;
+  padding: 16px 18px; box-shadow: 0 20px 70px rgba(0,0,0,.6); }
+.set-head h2 { margin: 0 0 8px; font-size: 18px; letter-spacing: .08em; color: #bfe8ff; border-bottom: 1px solid #1d3354; padding-bottom: 10px; }
+.set-body { display: flex; flex-direction: column; gap: 4px; padding: 10px 0; }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 4px; border-bottom: 1px solid rgba(40,60,100,.25); }
+.set-row.set-col { flex-direction: column; align-items: flex-start; gap: 4px; }
+.set-btn { font-size: 12px; padding: 6px 12px; }
+.set-val { color: #9cc6ff; font-size: 12px; }
+.set-hint { color: #6f86ad; font-size: 11px; line-height: 1.4; }
+.set-hint b { color: #9cc6ff; }
+.set-foot { display: flex; align-items: center; gap: 10px; border-top: 1px solid #1d3354; padding-top: 12px; margin-top: 6px; }

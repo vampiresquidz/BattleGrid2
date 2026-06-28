@@ -17,7 +17,7 @@ export function initSfx() {
   if (ready) return;
   ready = true;
   for (const n of NAMES) {
-    const a = new Audio(`/sfx/${n}.mp3?v=1`); // version → cache-bust on updates
+    const a = new Audio(`/sfx/${n}.mp3?v=2`); // version → cache-bust on updates
     a.preload = 'auto';
     bank[n] = a;
   }
@@ -30,10 +30,15 @@ export function setMuted(m: boolean) {
 }
 export function toggleMuted() { setMuted(!muted); return muted; }
 
+const lastPlay: Partial<Record<Sfx, number>> = {};
 export function playSfx(name: Sfx, vol = 0.5) {
   if (muted || !ready) return;
   const base = bank[name];
   if (!base) return;
+  // throttle: don't let the same sound machine-gun on rapid taps
+  const now = (performance?.now?.() ?? Date.now());
+  if (now - (lastPlay[name] ?? -1e9) < 70) return;
+  lastPlay[name] = now;
   try {
     const a = base.cloneNode(true) as HTMLAudioElement;
     a.volume = Math.max(0, Math.min(1, vol));

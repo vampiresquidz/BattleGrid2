@@ -43,7 +43,7 @@ import { openDeckBuilder } from './deckbuilder.ts';
 import { openChipShop } from './shop.ts';
 import { openOps } from './ops.ts';
 import { initTide, getTide, getClearance, decorateName } from './tide.ts';
-import { isMuted, toggleMuted, playSfx } from './sfx.ts';
+import { openSettings } from './settings.ts';
 
 const BOUNDS = { x: 28, z: 19 };  // expanded play area
 const SPEED = 6.4;
@@ -137,6 +137,7 @@ export class OverworldScene {
   private deckOpen = false;
   private shopOpen = false;
   private opsOpen = false;
+  private settingsOpen = false;
   private tideEl?: HTMLElement;
   private saveT = 0;
 
@@ -813,15 +814,15 @@ export class OverworldScene {
     this.tideEl = tide;
     this.updateTide();
 
-    // sound mute toggle
-    const mute = document.createElement('button');
-    mute.id = 'ow-mute';
-    mute.className = 'btn';
-    mute.style.cssText = 'position:fixed;top:124px;left:16px;z-index:12;font-size:13px;padding:7px 11px';
-    const paint = () => { mute.textContent = isMuted() ? '🔇' : '🔊'; };
-    paint();
-    mute.onclick = () => { const m = toggleMuted(); paint(); if (!m) playSfx('ui_click', 0.4); };
-    this.container.appendChild(mute); this.dom.push(mute);
+    // settings (sound, install, account)
+    const gear = document.createElement('button');
+    gear.id = 'ow-settings';
+    gear.className = 'btn';
+    gear.style.cssText = 'position:fixed;top:124px;left:16px;z-index:12;font-size:14px;padding:7px 12px';
+    gear.textContent = '⚙';
+    gear.title = 'Settings';
+    gear.onclick = () => this.openSettings();
+    this.container.appendChild(gear); this.dom.push(gear);
 
     // data-shard counter
     const shard = document.createElement('div');
@@ -913,9 +914,15 @@ export class OverworldScene {
   }
 
   private openOps() {
-    if (this.opsOpen || this.shopOpen || this.deckOpen || this.rosterOpen || this.warpOpen || this.talking || !!this.challengeEl) return;
+    if (this.opsOpen || this.shopOpen || this.deckOpen || this.settingsOpen || this.rosterOpen || this.warpOpen || this.talking || !!this.challengeEl) return;
     this.opsOpen = true;
     openOps(this.container, () => { this.opsOpen = false; this.updateTide(); this.broadcastCosmetics(); });
+  }
+
+  private openSettings() {
+    if (this.settingsOpen || this.opsOpen || this.shopOpen || this.deckOpen || this.rosterOpen || this.warpOpen || this.talking || !!this.challengeEl) return;
+    this.settingsOpen = true;
+    openSettings(this.container, this.session, () => { this.settingsOpen = false; });
   }
 
   // re-send presence with the freshly-equipped badge so peers see the flex
@@ -1107,7 +1114,7 @@ export class OverworldScene {
     this.updateActorFocus();
     this.updatePeerFocus();
     for (const code of this.fresh) {
-      if (this.deckOpen || this.shopOpen || this.opsOpen) break; // an open modal owns input
+      if (this.deckOpen || this.shopOpen || this.opsOpen || this.settingsOpen) break; // an open modal owns input
       if (code === 'KeyB') this.openDeck();
       else if (code === 'KeyT') this.openOps();
       else if (code === 'KeyC') this.toggleRoster();
@@ -1134,7 +1141,7 @@ export class OverworldScene {
 
     let dir: Dir | null = null;
     let running = false;
-    if (!this.talking && !this.done && !this.rosterOpen && !this.warpOpen && !this.challengeEl && !this.deckOpen && !this.shopOpen && !this.opsOpen) {
+    if (!this.talking && !this.done && !this.rosterOpen && !this.warpOpen && !this.challengeEl && !this.deckOpen && !this.shopOpen && !this.opsOpen && !this.settingsOpen) {
       let dx = 0, dz = 0;
       if (this.keys['KeyA'] || this.keys['ArrowLeft']) dx -= 1;
       if (this.keys['KeyD'] || this.keys['ArrowRight']) dx += 1;
@@ -1163,7 +1170,7 @@ export class OverworldScene {
     }
 
     // interaction prompt (actors take priority; else offer a duel to a nearby player)
-    if (this.deckOpen || this.shopOpen || this.opsOpen) {
+    if (this.deckOpen || this.shopOpen || this.opsOpen || this.settingsOpen) {
       this.prompt.style.display = 'none';
     } else if (!this.talking && !this.rosterOpen && !this.warpOpen && !this.challengeEl && this.currentActor) {
       this.prompt.textContent = `E · ${this.currentActor.prompt()}`;

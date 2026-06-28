@@ -26,7 +26,7 @@ API = "https://api.elevenlabs.io/v1/sound-generation"
 SFX = {
     "ui_click":  ("short crisp digital UI button click, clean futuristic interface blip", 0.5),
     "ui_confirm":("positive confirm chime, short bright sci-fi interface accept", 0.6),
-    "buster":    ("quick energy pulse laser shot, snappy retro sci-fi blaster zap", 0.6),
+    "buster":    ("soft short muffled energy blip, gentle low pitched sci-fi pew, subtle and quiet, not harsh", 0.4),
     "cannon":    ("punchy energy cannon blast, deep impactful sci-fi shot", 0.7),
     "slash":     ("fast energy sword slash, sharp swoosh with a metallic ring", 0.6),
     "bomb":      ("explosion, punchy digital boom with a short debris tail", 0.9),

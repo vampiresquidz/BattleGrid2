@@ -785,7 +785,7 @@ export class BattleScene {
   // ---------------- Attacks ----------------
   private fireBuster() {
     this.playerAnim.triggerBlaster();
-    playSfx('buster', 0.4);
+    playSfx('buster', 0.18);
     this.spawnProjectile('player', this.playerPos.row, 14, 6, this.busterMat, 0.45);
   }
 
