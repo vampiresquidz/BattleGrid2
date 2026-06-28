@@ -10,6 +10,8 @@ import { OVERWORLD_ASSETS, battleAssetsFor } from './loader.ts';
 import { getSelectedBody } from './characters.ts';
 import { setTouchMode } from './touch.ts';
 import { startGuestMode, GUEST_SESSION } from './guest.ts';
+import { isMobile, connectPhantomMobile, handleMobileRedirect } from './walletMobile.ts';
+import { reownEnabled, connectReown } from './reown.ts';
 
 const app = document.getElementById('app')!;
 
@@ -33,13 +35,20 @@ function showLogin() {
   const screen = document.createElement('div');
   screen.id = 'login';
   const installed = isPhantomInstalled();
+  const mobile = isMobile();
+  // Label: injected wallet → sign; mobile (no injection) → deeplink to the app; desktop → install.
+  const connectLabel = installed ? 'Connect Phantom' : mobile ? 'Connect Phantom (app)' : 'Get Phantom Wallet';
+  const wcBtn = reownEnabled() ? '<button class="btn btn-ghost" id="wc">Connect a Wallet</button>' : '';
   screen.innerHTML = `
     <h1>ABYSSAL&nbsp;GRID</h1>
     <p>An HD-2D grid battler on an alien data-world. Build a folder of chips, dive in, and delete what comes at you.</p>
-    <button class="btn" id="connect">${installed ? 'Connect Phantom' : 'Get Phantom Wallet'}</button>
+    <button class="btn" id="connect">${connectLabel}</button>
+    ${wcBtn}
     <button class="btn btn-ghost" id="guest">Play as Guest</button>
     <div class="status" id="status"></div>
-    <div class="hint">${installed ? 'You\'ll sign a free message to log in — no transaction, no fees.' : 'Phantom not detected in this browser.'}</div>
+    <div class="hint">${installed ? 'You\'ll sign a free message to log in — no transaction, no fees.'
+      : mobile ? 'Opens the Phantom app to connect — no in-app browser needed.'
+      : 'Phantom not detected in this browser.'}</div>
     <div class="hint">Guest mode lets you play instantly — but nothing is saved (no credits, ◊ TIDE, decks or NFTs).</div>`;
   app.appendChild(screen);
 
@@ -53,20 +62,42 @@ function showLogin() {
   };
 
   btn.onclick = async () => {
-    if (!isPhantomInstalled()) {
-      window.open('https://phantom.app/', '_blank');
+    // 1) injected provider (desktop extension or Phantom in-app browser)
+    if (isPhantomInstalled()) {
+      btn.disabled = true;
+      status.textContent = 'Awaiting wallet approval…';
+      try {
+        const session = await login();
+        status.textContent = 'Signed in. Diving…';
+        screen.remove();
+        showOverworld(session);
+      } catch (err) {
+        btn.disabled = false;
+        status.textContent = (err as Error).message ?? 'Login cancelled.';
+      }
       return;
     }
-    btn.disabled = true;
-    status.textContent = 'Awaiting wallet approval…';
+    // 2) mobile browser with no injected wallet → Phantom deeplink (navigates away)
+    if (mobile) {
+      status.textContent = 'Opening Phantom…';
+      connectPhantomMobile();
+      return;
+    }
+    // 3) desktop without the extension
+    window.open('https://phantom.app/', '_blank');
+  };
+
+  const wc = screen.querySelector('#wc') as HTMLButtonElement | null;
+  if (wc) wc.onclick = async () => {
+    wc.disabled = true;
+    status.textContent = 'Opening wallet…';
     try {
-      const session = await login();
-      status.textContent = 'Signed in. Diving…';
+      const session = await connectReown();
       screen.remove();
       showOverworld(session);
     } catch (err) {
-      btn.disabled = false;
-      status.textContent = (err as Error).message ?? 'Login cancelled.';
+      wc.disabled = false;
+      status.textContent = (err as Error).message ?? 'Connection cancelled.';
     }
   };
 
@@ -139,5 +170,9 @@ if (params.has('dev')) {
       .then(() => { setTouchMode('battle'); return new BattleScene(app, session, { startIndex: idx }); });
   } else { void showOverworld(session); }
 } else {
-  showLogin();
+  // Resume a Phantom mobile-deeplink login if we're mid-redirect; else show login.
+  void handleMobileRedirect().then((session) => {
+    if (session) showOverworld(session);
+    else showLogin();
+  });
 }
