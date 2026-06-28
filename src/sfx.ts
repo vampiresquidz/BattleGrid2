@@ -7,8 +7,13 @@ const NAMES = [
 ] as const;
 export type Sfx = typeof NAMES[number];
 
-let muted = false;
-try { muted = localStorage.getItem('abyssal.muted') === '1'; } catch { /* ignore */ }
+// global SFX volume 0..1 (0 = muted). Persisted; migrates the old mute flag.
+let volume = 0.7;
+try {
+  const raw = localStorage.getItem('abyssal.sfxvol');
+  if (raw != null) { const v = parseFloat(raw); if (!Number.isNaN(v)) volume = Math.max(0, Math.min(1, v)); }
+  else if (localStorage.getItem('abyssal.muted') === '1') volume = 0;
+} catch { /* ignore */ }
 
 const bank: Partial<Record<Sfx, HTMLAudioElement>> = {};
 let ready = false;
@@ -23,16 +28,15 @@ export function initSfx() {
   }
 }
 
-export function isMuted() { return muted; }
-export function setMuted(m: boolean) {
-  muted = m;
-  try { localStorage.setItem('abyssal.muted', m ? '1' : '0'); } catch { /* ignore */ }
+export function getVolume() { return volume; }
+export function setVolume(v: number) {
+  volume = Math.max(0, Math.min(1, v));
+  try { localStorage.setItem('abyssal.sfxvol', String(volume)); } catch { /* ignore */ }
 }
-export function toggleMuted() { setMuted(!muted); return muted; }
 
 const lastPlay: Partial<Record<Sfx, number>> = {};
 export function playSfx(name: Sfx, vol = 0.5) {
-  if (muted || !ready) return;
+  if (!ready || volume <= 0) return;
   const base = bank[name];
   if (!base) return;
   // throttle: don't let the same sound machine-gun on rapid taps
@@ -41,7 +45,7 @@ export function playSfx(name: Sfx, vol = 0.5) {
   lastPlay[name] = now;
   try {
     const a = base.cloneNode(true) as HTMLAudioElement;
-    a.volume = Math.max(0, Math.min(1, vol));
+    a.volume = Math.max(0, Math.min(1, vol * volume));
     void a.play().catch(() => { /* autoplay can be blocked until a gesture */ });
   } catch { /* ignore */ }
 }

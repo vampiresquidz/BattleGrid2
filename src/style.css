@@ -658,3 +658,10 @@ body.touch #ow-hint, body.touch #controls { display: none !important; }
 .set-hint { color: #6f86ad; font-size: 11px; line-height: 1.4; }
 .set-hint b { color: #9cc6ff; }
 .set-foot { display: flex; align-items: center; gap: 10px; border-top: 1px solid #1d3354; padding-top: 12px; margin-top: 6px; }
+.set-sliderrow { display: flex; align-items: center; gap: 10px; width: 100%; }
+.set-ico { font-size: 15px; width: 20px; text-align: center; }
+.set-slider { flex: 1; -webkit-appearance: none; appearance: none; height: 6px; border-radius: 5px;
+  background: linear-gradient(90deg, #39d0ff, #7a4ff0); outline: none; cursor: pointer; }
+.set-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+  border-radius: 50%; background: #eaf6ff; border: 2px solid #39d0ff; box-shadow: 0 0 8px rgba(57,208,255,.6); cursor: pointer; }
+.set-slider::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: #eaf6ff; border: 2px solid #39d0ff; cursor: pointer; }
