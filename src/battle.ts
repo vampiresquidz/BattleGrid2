@@ -109,6 +109,10 @@ export interface BattleOpts {
   encounter?: boolean;     // true = single fight that returns to the overworld
   onExit?: () => void;     // called when the player leaves an encounter battle
   pvp?: PvpOpts;           // PvP duel: opponent driven by the network, not AI
+  // Dungeon fight: scale the foe into a boss, and report win/lose to the dungeon
+  // orchestrator (which re-enters the maze on a win, ejects the run on a loss).
+  boss?: { hpMult?: number; name?: string };
+  onResult?: (win: boolean) => void;
 }
 
 export class BattleScene {
@@ -213,6 +217,8 @@ export class BattleScene {
 
   private encounter: boolean;
   private onExit?: () => void;
+  private boss?: { hpMult?: number; name?: string };
+  private onResult?: (win: boolean) => void;
   private walletTag!: HTMLElement;
 
   // PvP: opponent is the remote player (no AI). Each client simulates itself and
@@ -227,6 +233,8 @@ export class BattleScene {
     this.enemyDef = ENEMY_ROSTER[this.enemyIndex];
     this.encounter = opts.encounter ?? false;
     this.onExit = opts.onExit;
+    this.boss = opts.boss;
+    this.onResult = opts.onResult;
     this.pvp = opts.pvp;
     this.net = opts.pvp?.net;
     this.oppId = opts.pvp?.oppId ?? 0;
@@ -286,6 +294,7 @@ export class BattleScene {
     if (new URLSearchParams(location.search).has('dev')) (window as any).__battle = this;
 
     if (this.pvp) this.initPvp();
+    else if (this.boss) this.applyBoss();
 
     this.loop();
   }
@@ -588,6 +597,21 @@ export class BattleScene {
     this.syncEntity(this.enemy, this.enemyPos);
     const el = this.hud?.querySelector('#hp-enemy .ename') as HTMLElement | null;
     if (el) el.textContent = def.name;
+    this.updateHUD();
+  }
+
+  // Dungeon boss: inflate the current foe's HP, rename it, and scale it up so it
+  // reads as a proper boss. Bigger HP also means a bigger bounty (reward = HP/6).
+  private applyBoss() {
+    const mult = this.boss?.hpMult ?? 3.0;
+    this.enemyHP = Math.round(this.enemyDef.hp * mult);
+    this.enemyHPMax = this.enemyHP;
+    this.enemy.scale.set(this.enemyDef.scale * 1.45, this.enemyDef.scale * 1.45, 1);
+    if (this.boss?.name) {
+      this.enemyDef = { ...this.enemyDef, name: this.boss.name };
+      const el = this.hud?.querySelector('#hp-enemy .ename') as HTMLElement | null;
+      if (el) el.textContent = this.boss.name;
+    }
     this.updateHUD();
   }
 
@@ -1938,7 +1962,25 @@ export class BattleScene {
       : '';
 
     this.result.className = 'show ' + (win ? 'win' : 'lose');
-    if (this.encounter) {
+    if (this.onResult) {
+      // Dungeon fight: the orchestrator decides what happens next (back into the
+      // maze, advance past the boss, or eject the run on a loss).
+      const isBoss = !!this.boss;
+      const headline = win ? (isBoss ? 'CORE PURGED' : 'CLEARED') : 'DELETED';
+      const body = win
+        ? (isBoss ? 'The dungeon core is shattered. Extract your reward.' : 'Process deleted. The maze opens ahead.')
+        : 'Your run ends here. You are ejected from the grid…';
+      const label = win ? (isBoss ? 'Claim reward' : 'Back into the maze') : 'Leave the grid';
+      this.result.innerHTML = `
+        <h1>${headline}</h1>
+        <p>${body}</p>
+        ${bounty}
+        <button class="btn" id="dgnext">${label}</button>`;
+      (this.result.querySelector('#dgnext') as HTMLElement).onclick = () => {
+        this.dispose();
+        this.onResult?.(win);
+      };
+    } else if (this.encounter) {
       this.result.innerHTML = `
         <h1>${win ? 'VICTORY' : 'DELETED'}</h1>
         <p>${win ? 'The intruder is data now.' : 'Your process is purged from the node…'}</p>

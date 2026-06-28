@@ -15,6 +15,9 @@ import { reownEnabled, connectReown } from './reown.ts';
 import { initSfx, playSfx } from './sfx.ts';
 import { initPwa } from './pwa.ts';
 import { openSettings } from './settings.ts';
+import { DungeonScene } from './dungeonScene.ts';
+import { startDungeonRun, getRun, endDungeonRun, summary as dungeonSummary } from './dungeon.ts';
+import { addCredits } from './characters.ts';
 
 const app = document.getElementById('app')!;
 
@@ -144,7 +147,91 @@ async function showOverworld(session: Session, label = 'Loading sector…') {
   overworld = new OverworldScene(app, session, {
     onEncounter: (enemyIndex) => startEncounter(session, enemyIndex),
     onPvp: (info) => startPvp(session, info),
+    onPortal: () => enterDungeon(session),
   });
+}
+
+// ---- Roguelike dungeon: portal → maze → battles → boss → reward ----
+// The DungeonScene is rebuilt after every fight (each battle disposes the
+// previous scene), but the run itself lives in dungeon.ts so the maze, loot and
+// cleared rooms persist across those rebuilds.
+let dungeon: DungeonScene | null = null;
+
+async function enterDungeon(session: Session) {
+  overworld?.dispose();
+  overworld = null;
+  startDungeonRun();
+  await runLoading(app, OVERWORLD_ASSETS, { title: 'JACKING IN', label: 'Generating dungeon…', minMs: 400 });
+  showDungeon(session);
+}
+
+function showDungeon(session: Session, label = 'Compiling maze…') {
+  setTouchMode('overworld'); // reuse the D-pad + E controls
+  dungeon = new DungeonScene(app, session, {
+    onBattle: (enemyIndex, boss) => startDungeonBattle(session, enemyIndex, boss),
+    onLeave: () => leaveDungeon(session, false),
+  });
+  void label;
+}
+
+async function startDungeonBattle(session: Session, enemyIndex: number, boss: boolean) {
+  dungeon?.dispose();
+  dungeon = null;
+  const run = getRun();
+  const assets = battleAssetsFor(enemyIndex, [getSelectedBody()]);
+  await runLoading(app, assets, {
+    title: boss ? 'BOSS' : 'ENGAGING',
+    label: boss ? 'The core stirs…' : 'Compiling combat node…',
+    minMs: 300,
+  });
+  setTouchMode('battle');
+  new BattleScene(app, session, {
+    startIndex: enemyIndex,
+    encounter: true,
+    boss: boss ? { hpMult: 3.4, name: run?.bossName } : undefined,
+    onResult: (win) => onDungeonBattleEnd(session, win, boss),
+  });
+}
+
+async function onDungeonBattleEnd(session: Session, win: boolean, boss: boolean) {
+  if (!win) { leaveDungeon(session, false); return; }          // a loss ends the run
+  const run = getRun();
+  if (boss) {                                                   // cleared the dungeon!
+    run && (run.bossDown = true);
+    const reward = 300 + (run?.depth ?? 1) * 150;
+    addCredits(reward);
+    leaveDungeon(session, true, reward);
+    return;
+  }
+  if (run) run.enemiesCleared++;                                // back into the maze
+  await runLoading(app, OVERWORLD_ASSETS, { title: 'THE GRID DUNGEON', label: 'Re-entering the maze…', minMs: 250 });
+  showDungeon(session);
+}
+
+async function leaveDungeon(session: Session, cleared: boolean, bonus = 0) {
+  dungeon?.dispose();
+  dungeon = null;
+  const sum = dungeonSummary(cleared);
+  endDungeonRun();
+  await showOverworld(session, cleared ? 'Extracting…' : 'Recompiling sector…');
+  showDungeonResult(sum, bonus);
+}
+
+// Post-run summary card over the overworld (win = extraction, loss = ejection).
+function showDungeonResult(sum: import('./dungeon.ts').DungeonSummary, bonus: number) {
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:rgba(4,4,12,.7)';
+  el.innerHTML = `<div class="roster-panel" style="max-width:380px;text-align:center">
+    <h2 style="color:${sum.cleared ? '#8fffc4' : '#ff7a9c'}">${sum.cleared ? 'DUNGEON CLEARED' : 'RUN ENDED'}</h2>
+    <div class="sub" style="margin:10px 0 16px">
+      ${sum.cleared ? `You purged <b>${sum.bossName}</b> and extracted.` : 'You were deleted in the maze.'}<br>
+      Depth ${sum.depth} · processes purged ${sum.enemiesCleared} · ◈ ${sum.creditsLooted} looted${bonus ? `<br><b style="color:#ffd86b">+◈ ${bonus} clear bonus</b>` : ''}
+    </div>
+    <button class="btn" data-act="ok" style="display:block;width:100%">Return to the sector</button>
+  </div>`;
+  app.appendChild(el);
+  (el.querySelector('[data-act="ok"]') as HTMLElement).onclick = () => el.remove();
+  playSfx(sum.cleared ? 'victory' : 'defeat', 0.5);
 }
 
 async function startEncounter(session: Session, enemyIndex: number) {
@@ -190,6 +277,8 @@ if (params.has('dev')) {
     const idx = Number(params.get('enemy') ?? 0);
     runLoading(app, battleAssetsFor(idx, [getSelectedBody()]), { title: 'ENGAGING', label: 'Compiling combat node…', minMs: 300 })
       .then(() => { setTouchMode('battle'); return new BattleScene(app, session, { startIndex: idx }); });
+  } else if (params.has('dungeon')) {
+    void enterDungeon(session); // jump straight into a fresh roguelike maze
   } else { void showOverworld(session); }
 } else {
   // Resume a Phantom mobile-deeplink login if we're mid-redirect; else show login.

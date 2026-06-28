@@ -104,6 +104,7 @@ export interface PvpInfo {
 export interface OverworldOpts {
   onEncounter: (enemyIndex: number) => void;
   onPvp?: (info: PvpInfo) => void;
+  onPortal?: () => void;   // step into the roguelike dungeon portal
 }
 
 // HD-2D alien digital planet: free-roam a large glowing data-continent split into
@@ -358,6 +359,13 @@ export class OverworldScene {
         `"Recover all ${this.shardTotal} data-shards and the cache they unlock is... generous."`,
         '"The outer grid and deep sectors hide the rest. Mind the storms."',
       ]));
+
+    // The Dungeon Portal — a swirling rift that drops you into a freshly
+    // generated roguelike maze: loot, processes, and a boss at the core.
+    const portal = this.makeSprite(orbTexture('#ffd6ff', '#b03aff'), 3.6);
+    this.addActor(portal, 0, -6, 2.1, 3.0,
+      () => 'Enter the GRID DUNGEON ·  ▣',
+      () => this.opts.onPortal?.(), 0.22);
 
     // Data caches — crack for Credits (once, persisted). Reward scales with depth.
     const cacheSpots: Array<[number, number]> = [
