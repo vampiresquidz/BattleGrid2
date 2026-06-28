@@ -1635,7 +1635,7 @@ export class BattleScene {
     if (this.pvp) { this.enemyAnim.triggerHit(); this.bsend('hit', { damage: d }); return; }
     if (this.enemyMarkT > 0) d = Math.round(d * 1.5); // Exploit Tag amplifies your hits
     this.enemyHP -= d;
-    playSfx('hit', 0.4);
+    playSfx('hit', 0.18);
     this.enemyAnim.triggerHit();
     if (this.enemyHP <= 0) { this.enemyHP = 0; this.endBattle(true); }
     this.updateHUD();
