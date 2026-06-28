@@ -20,6 +20,7 @@ import {
 } from './chips.ts';
 import { equippedEffects, type AggregatedEffects } from './navicust.ts';
 import { recordBattle } from './tide.ts';
+import { playSfx, sfxForChip } from './sfx.ts';
 import type { Session } from './wallet.ts';
 
 // ---------- Grid constants ----------
@@ -784,11 +785,13 @@ export class BattleScene {
   // ---------------- Attacks ----------------
   private fireBuster() {
     this.playerAnim.triggerBlaster();
+    playSfx('buster', 0.4);
     this.spawnProjectile('player', this.playerPos.row, 14, 6, this.busterMat, 0.45);
   }
 
   private fireCharged() {
     this.playerAnim.triggerBlaster();
+    playSfx('cannon', 0.55);
     this.spawnProjectile('player', this.playerPos.row, 22, CHARGED_DMG, this.cannonMat, 1.0);
     this.spawnEffect(this.player.position.clone(), this.guardMat, 1.3);
   }
@@ -810,6 +813,8 @@ export class BattleScene {
       this.spawnEffect(this.player.position.clone(), this.cannonMat, 1.3);
     }
     this.playerAnim.triggerAttack();
+    const sfx = sfxForChip(chip.kind);
+    if (sfx) playSfx(sfx, 0.5);
     const row = this.playerPos.row;
     const fromCol = this.playerPos.col;
 
@@ -1139,6 +1144,7 @@ export class BattleScene {
 
   // Fire a fused Program Advance. Recipes are bigger/wider than any single chip.
   private firePA(paId: string, row: number, fromCol: number) {
+    playSfx('pa', 0.7);
     this.spawnEffect(this.player.position.clone(), this.guardMat, 1.8);
     switch (paId) {
       case 'gigacannon':
@@ -1629,6 +1635,7 @@ export class BattleScene {
     if (this.pvp) { this.enemyAnim.triggerHit(); this.bsend('hit', { damage: d }); return; }
     if (this.enemyMarkT > 0) d = Math.round(d * 1.5); // Exploit Tag amplifies your hits
     this.enemyHP -= d;
+    playSfx('hit', 0.4);
     this.enemyAnim.triggerHit();
     if (this.enemyHP <= 0) { this.enemyHP = 0; this.endBattle(true); }
     this.updateHUD();
@@ -1669,6 +1676,7 @@ export class BattleScene {
       if (d <= 0) { this.updateHUD(); return; }
     }
     this.playerHP -= d;
+    playSfx('hurt', 0.45);
     this.playerAnim.triggerHit();
     if (this.playerHP <= 0) { this.playerHP = 0; this.endBattle(false); }
     this.updateHUD();
@@ -1904,6 +1912,7 @@ export class BattleScene {
     if (this.over) return;
     this.over = true;
     if (this.pvp && !win) this.bsend('over'); // tell the foe they won
+    playSfx(win ? 'victory' : 'defeat', 0.6);
     if (win) this.playerAnim.triggerVictory();
     this.clearStrikes();
     this.clearMines();

@@ -12,8 +12,18 @@ import { setTouchMode } from './touch.ts';
 import { startGuestMode, GUEST_SESSION } from './guest.ts';
 import { isMobile, connectPhantomMobile, handleMobileRedirect } from './walletMobile.ts';
 import { reownEnabled, connectReown } from './reown.ts';
+import { initSfx, playSfx } from './sfx.ts';
 
 const app = document.getElementById('app')!;
+
+// SFX: preload + a global click blip on interactive controls
+initSfx();
+document.addEventListener('pointerdown', (e) => {
+  const t = e.target as HTMLElement | null;
+  if (t && t.closest('.btn, .tc-btn, .db-card, .shop-card, .ops-cos, .ops-tab, .db-tab, .db-filt, .chipcard, .db-slot, [data-claim], [data-mode]')) {
+    playSfx('ui_click', 0.3);
+  }
+}, true);
 
 // ---- PWA: install the service worker + offer an "Install" button ----
 if ('serviceWorker' in navigator) {

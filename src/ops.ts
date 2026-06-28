@@ -6,6 +6,7 @@ import {
   getNftAsset, recordNftMint, type CosmeticKind,
 } from './tide.ts';
 import { mintCosmeticNft } from './nft.ts';
+import { playSfx } from './sfx.ts';
 
 const KIND_LABEL: Record<CosmeticKind, string> = { badge: 'Badges', title: 'Titles', color: 'Name Colors' };
 const KIND_ORDER: CosmeticKind[] = ['badge', 'title', 'color'];
@@ -120,10 +121,10 @@ export function openOps(container: HTMLElement, onClose?: () => void) {
       </div>`;
 
     el.querySelectorAll('[data-tab]').forEach((n) => (n as HTMLElement).onclick = () => { tab = (n as HTMLElement).dataset.tab as 'quests' | 'vault'; render(); });
-    el.querySelectorAll('[data-claim]').forEach((n) => (n as HTMLElement).onclick = () => { claimQuest((n as HTMLElement).dataset.claim!); render(); });
+    el.querySelectorAll('[data-claim]').forEach((n) => (n as HTMLElement).onclick = () => { if (claimQuest((n as HTMLElement).dataset.claim!) > 0) playSfx('ui_confirm', 0.5); render(); });
     const rr = el.querySelector('[data-reroll]') as HTMLElement | null;
     if (rr) rr.onclick = () => { rerollQuests(); render(); };
-    el.querySelectorAll('[data-mint]').forEach((n) => (n as HTMLElement).onclick = () => { mintCosmetic((n as HTMLElement).dataset.mint!); render(); });
+    el.querySelectorAll('[data-mint]').forEach((n) => (n as HTMLElement).onclick = () => { if (mintCosmetic((n as HTMLElement).dataset.mint!)) playSfx('mint', 0.5); render(); });
     el.querySelectorAll('[data-equip]').forEach((n) => (n as HTMLElement).onclick = () => { equipCosmetic((n as HTMLElement).dataset.equip!); render(); });
     el.querySelectorAll('[data-mintnft]').forEach((n) => (n as HTMLElement).onclick = async () => {
       if (mintingId) return; // one at a time
@@ -132,6 +133,7 @@ export function openOps(container: HTMLElement, onClose?: () => void) {
       try {
         const res = await mintCosmeticNft(id);
         recordNftMint(id, res.asset);
+        playSfx('mint', 0.6);
         mintMsg = `✓ Minted on-chain · ${res.asset.slice(0, 4)}…${res.asset.slice(-4)}`;
       } catch (e) {
         mintMsg = '⚠ ' + ((e as Error).message || 'Mint failed.');

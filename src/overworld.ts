@@ -43,6 +43,7 @@ import { openDeckBuilder } from './deckbuilder.ts';
 import { openChipShop } from './shop.ts';
 import { openOps } from './ops.ts';
 import { initTide, getTide, getClearance, decorateName } from './tide.ts';
+import { isMuted, toggleMuted, playSfx } from './sfx.ts';
 
 const BOUNDS = { x: 28, z: 19 };  // expanded play area
 const SPEED = 6.4;
@@ -811,6 +812,16 @@ export class OverworldScene {
     this.container.appendChild(tide); this.dom.push(tide);
     this.tideEl = tide;
     this.updateTide();
+
+    // sound mute toggle
+    const mute = document.createElement('button');
+    mute.id = 'ow-mute';
+    mute.className = 'btn';
+    mute.style.cssText = 'position:fixed;top:124px;left:16px;z-index:12;font-size:13px;padding:7px 11px';
+    const paint = () => { mute.textContent = isMuted() ? '🔇' : '🔊'; };
+    paint();
+    mute.onclick = () => { const m = toggleMuted(); paint(); if (!m) playSfx('ui_click', 0.4); };
+    this.container.appendChild(mute); this.dom.push(mute);
 
     // data-shard counter
     const shard = document.createElement('div');
