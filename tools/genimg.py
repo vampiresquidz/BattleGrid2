@@ -34,6 +34,12 @@ def main():
     ap.add_argument("--size", default="1024x1024")
     ap.add_argument("--bg", default="transparent", choices=["transparent", "opaque", "auto"])
     ap.add_argument("--quality", default="high", choices=["high", "medium", "low", "auto"])
+    # pixel-snap pass: turn the soft AI image into crisp true pixel art
+    ap.add_argument("--snap", action="store_true", help="pixel-snap the result (writes <out>_px.png)")
+    ap.add_argument("--snap-colors", type=int, default=16)
+    ap.add_argument("--snap-size", type=int, default=None, help="output logical resolution NxN (else auto)")
+    ap.add_argument("--snap-upscale", type=int, default=8)
+    ap.add_argument("--snap-key", choices=["green", "magenta", "blue"], default=None)
     args = ap.parse_args()
 
     body = {
@@ -62,6 +68,13 @@ def main():
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(base64.b64decode(b64))
     print(f"OK -> {out}  ({out.stat().st_size} bytes)")
+
+    if args.snap:
+        from pixelsnap import snap_image  # local tool: AI image -> true pixel art
+        px = out.with_name(out.stem + "_px.png")
+        w, h = snap_image(out, px, colors=args.snap_colors, size=args.snap_size,
+                          upscale=args.snap_upscale, key=args.snap_key)
+        print(f"SNAP -> {px}  ({w}x{h} logical, x{args.snap_upscale})")
 
 if __name__ == "__main__":
     main()
