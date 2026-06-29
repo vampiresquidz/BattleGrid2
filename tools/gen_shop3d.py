@@ -82,7 +82,7 @@ def main():
     ap.add_argument("--image")
     args = ap.parse_args()
 
-    seed = Path(args.image) if args.image else Path("assets/raw/shop_seed.png")
+    seed = Path(args.image) if args.image else Path("assets/raw") / (Path(args.out).stem + "_seed.png")
     if not args.image:
         gen_image(args.prompt, seed)
     flat = prep(seed)

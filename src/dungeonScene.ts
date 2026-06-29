@@ -4,6 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { orbTexture, humanoidTexture } from './sprites.ts';
 import type { AgentBody } from './sprites.ts';
 import { getCredits, addCredits, getSelectedCharacter, getSelectedBody, tintColor } from './characters.ts';
@@ -39,6 +40,9 @@ export interface DungeonOpts {
 }
 
 const TILE = 2.4;
+// biome tint by distance-from-start tier: the maze shifts cyan → magenta → amber
+// as you push deeper toward the boss core.
+const TIER_COLORS = [0x37c8ff, 0xc46bff, 0xffb24a];
 
 export class DungeonScene {
   private renderer: THREE.WebGLRenderer;
@@ -53,6 +57,8 @@ export class DungeonScene {
   private playerBaseY = 1.35;
   private torch!: THREE.PointLight;
   private motes!: THREE.Points;
+  private decor: Array<{ obj: THREE.Object3D; type: 'pylon' | 'core'; spin: number; baseY: number; bob: number }> = [];
+  private panelCache = new Map<string, THREE.Texture>();
   private cur = new THREE.Vector2();      // current world pos (x,z)
   private targetTile: { col: number; row: number };
   private pendingArrive = false;
@@ -137,53 +143,73 @@ export class DungeonScene {
     this.motes = this.makeMotes();
     this.scene.add(this.motes);
 
-    // ---- which tiles are floor (data-road panels) ----
+    // ---- which tiles are floor + their biome tier (distance from start) ----
     const floorIdx: number[] = [];
     for (let r = 0; r < run.th; r++)
       for (let c = 0; c < run.tw; c++)
         if (run.tiles[r * run.tw + c] === 1) floorIdx.push(r * run.tw + c);
+    const tier = this.tierMap();
+    const nbCount = (c: number, r: number) =>
+      (isFloor(run, c + 1, r) ? 1 : 0) + (isFloor(run, c - 1, r) ? 1 : 0) +
+      (isFloor(run, c, r + 1) ? 1 : 0) + (isFloor(run, c, r - 1) ? 1 : 0);
 
-    // ---- floor panels: dark tile, bright neon border (one per road tile) ----
-    const panelTex = this.netPanelTexture();
-    const floorMat = new THREE.MeshStandardMaterial({
-      map: panelTex, emissiveMap: panelTex, emissive: 0xffffff, emissiveIntensity: 0.55,
-      color: 0x16294f, roughness: 0.9, metalness: 0.1,
-    });
+    // ---- floor panels grouped by (tier colour × variant detail) ----
+    // junctions get a "hub" node panel, some tiles get circuitry, rest are plain;
+    // the whole group is tinted by its distance tier so the maze reads as biomes.
     const floorGeo = new THREE.BoxGeometry(TILE, 0.28, TILE);
-    const floor = new THREE.InstancedMesh(floorGeo, floorMat, floorIdx.length);
     const m = new THREE.Matrix4();
-    floorIdx.forEach((k, i) => {
+    const groups = new Map<string, number[]>();
+    for (const k of floorIdx) {
       const c = k % run.tw, r = (k / run.tw) | 0;
-      m.makeTranslation(this.wx(c), -0.14, this.wz(r));
-      floor.setMatrixAt(i, m);
-    });
-    floor.instanceMatrix.needsUpdate = true;
-    this.scene.add(floor);
+      const t = Math.max(0, tier[k]);
+      const v = nbCount(c, r) >= 3 ? 'node' : (this.hash(k) % 5 === 0 ? 'circuit' : 'plain');
+      const arr = groups.get(t + ':' + v); if (arr) arr.push(k); else groups.set(t + ':' + v, [k]);
+    }
+    for (const [gk, keys] of groups) {
+      const [tStr, v] = gk.split(':');
+      const tex = this.panelTex(v);
+      const mat = new THREE.MeshStandardMaterial({
+        map: tex, emissiveMap: tex, emissive: new THREE.Color(TIER_COLORS[+tStr]),
+        emissiveIntensity: 0.7, color: 0x16294f, roughness: 0.9, metalness: 0.1,
+      });
+      const mesh = new THREE.InstancedMesh(floorGeo, mat, keys.length);
+      keys.forEach((k, i) => {
+        const c = k % run.tw, r = (k / run.tw) | 0;
+        m.makeTranslation(this.wx(c), -0.14, this.wz(r));
+        mesh.setMatrixAt(i, m);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+      this.scene.add(mesh);
+    }
 
-    // ---- edge rails: a low glowing curb wherever a road meets the void
-    // (replaces dungeon walls — defines the path silhouette, MMBN road-edge look)
+    // ---- edge rails (glowing curb where a road meets the void), tinted by tier ----
     const RAIL_H = 0.55, RAIL_T = 0.16, railY = RAIL_H / 2 - 0.02;
-    const rails: THREE.Matrix4[] = [];
+    const railGeo = new THREE.BoxGeometry(TILE, RAIL_H, RAIL_T);
     const q = new THREE.Quaternion();
     const yAxis = new THREE.Vector3(0, 1, 0);
     const one = new THREE.Vector3(1, 1, 1);
     const edges: Array<[number, number, boolean]> = [[0, -1, false], [0, 1, false], [-1, 0, true], [1, 0, true]];
+    const railByTier: THREE.Matrix4[][] = [[], [], []];
     for (const k of floorIdx) {
-      const c = k % run.tw, r = (k / run.tw) | 0;
+      const c = k % run.tw, r = (k / run.tw) | 0; const t = Math.max(0, tier[k]);
       for (const [dc, dr, vert] of edges) {
-        if (isFloor(run, c + dc, r + dr)) continue; // neighbour is road → no rail
+        if (isFloor(run, c + dc, r + dr)) continue;
         q.setFromAxisAngle(yAxis, vert ? Math.PI / 2 : 0);
         const pos = new THREE.Vector3(this.wx(c) + dc * TILE / 2, railY, this.wz(r) + dr * TILE / 2);
-        rails.push(new THREE.Matrix4().compose(pos, q, one));
+        railByTier[t].push(new THREE.Matrix4().compose(pos, q, one));
       }
     }
-    const railMat = new THREE.MeshStandardMaterial({
-      color: 0x0a1830, emissive: 0x37c8ff, emissiveIntensity: 1.4, roughness: 0.6,
+    railByTier.forEach((mats, t) => {
+      if (!mats.length) return;
+      const mat = new THREE.MeshStandardMaterial({ color: 0x0a1830, emissive: new THREE.Color(TIER_COLORS[t]), emissiveIntensity: 1.5, roughness: 0.6 });
+      const mesh = new THREE.InstancedMesh(railGeo, mat, mats.length);
+      mats.forEach((mm, i) => mesh.setMatrixAt(i, mm));
+      mesh.instanceMatrix.needsUpdate = true;
+      this.scene.add(mesh);
     });
-    const railMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(TILE, RAIL_H, RAIL_T), railMat, rails.length);
-    rails.forEach((mat, i) => railMesh.setMatrixAt(i, mat));
-    railMesh.instanceMatrix.needsUpdate = true;
-    this.scene.add(railMesh);
+
+    // ---- decorative set-dressing: pylons in the void, data-cores over hubs ----
+    this.buildProps(tier, nbCount);
 
     // ---- node tokens (loot / enemy / boss) ----
     for (const [k, n] of run.nodes) {
@@ -217,35 +243,172 @@ export class DungeonScene {
     this.scene.add(this.player);
   }
 
-  // A square "Net" panel: dark fill, bright cyan border + faint inner detail.
-  // Used as both map and emissiveMap so only the bright pixels bloom.
-  private netPanelTexture(): THREE.Texture {
+  // A "Net" panel variant: dark fill + near-white detail/border (so the floor
+  // material's emissive tier-colour tints it). plain = crosshatch, node = a hub
+  // emblem for junctions, circuit = traces. Cached per variant.
+  private panelTex(variant: string): THREE.Texture {
+    const hit = this.panelCache.get(variant); if (hit) return hit;
     const s = 128;
     const cv = document.createElement('canvas'); cv.width = cv.height = s;
     const g = cv.getContext('2d')!;
     const bg = g.createLinearGradient(0, 0, s, s);
-    bg.addColorStop(0, '#13244a'); bg.addColorStop(1, '#0c1730');
+    bg.addColorStop(0, '#12224a'); bg.addColorStop(1, '#0b1530');
     g.fillStyle = bg; g.fillRect(0, 0, s, s);
-    // faint inner crosshatch
-    g.strokeStyle = 'rgba(70,120,200,0.22)'; g.lineWidth = 1;
-    for (let i = 1; i < 4; i++) {
-      g.beginPath(); g.moveTo((i * s) / 4, 6); g.lineTo((i * s) / 4, s - 6); g.stroke();
-      g.beginPath(); g.moveTo(6, (i * s) / 4); g.lineTo(s - 6, (i * s) / 4); g.stroke();
+    const line = 'rgba(220,244,255,0.95)';
+    if (variant === 'node') {
+      g.strokeStyle = 'rgba(170,230,255,0.6)'; g.lineWidth = 2;
+      for (const [x, y] of [[64, 12], [64, 116], [12, 64], [116, 64]]) {
+        g.beginPath(); g.moveTo(64, 64); g.lineTo(x, y); g.stroke();
+      }
+      g.beginPath();
+      for (let i = 0; i < 6; i++) { const a = (Math.PI / 3) * i; const px = 64 + 24 * Math.cos(a), py = 64 + 24 * Math.sin(a); i ? g.lineTo(px, py) : g.moveTo(px, py); }
+      g.closePath(); g.strokeStyle = line; g.lineWidth = 3; g.stroke();
+      g.fillStyle = line; g.beginPath(); g.arc(64, 64, 6, 0, 6.3); g.fill();
+    } else if (variant === 'circuit') {
+      g.strokeStyle = 'rgba(160,215,255,0.55)'; g.lineWidth = 3; g.lineJoin = 'round';
+      g.beginPath(); g.moveTo(22, 42); g.lineTo(64, 42); g.lineTo(64, 92); g.lineTo(104, 92); g.stroke();
+      g.fillStyle = 'rgba(190,235,255,0.85)';
+      g.beginPath(); g.arc(22, 42, 4, 0, 6.3); g.fill();
+      g.beginPath(); g.arc(104, 92, 5, 0, 6.3); g.fill();
+    } else {
+      g.strokeStyle = 'rgba(70,120,200,0.22)'; g.lineWidth = 1;
+      for (let i = 1; i < 4; i++) {
+        g.beginPath(); g.moveTo((i * s) / 4, 6); g.lineTo((i * s) / 4, s - 6); g.stroke();
+        g.beginPath(); g.moveTo(6, (i * s) / 4); g.lineTo(s - 6, (i * s) / 4); g.stroke();
+      }
     }
-    // bright neon border (the road edge that reads at a glance)
     const pad = 6, w = s - pad * 2;
-    g.strokeStyle = '#5fe0ff'; g.lineWidth = 6; g.lineJoin = 'round';
-    g.strokeRect(pad, pad, w, w);
-    g.strokeStyle = 'rgba(150,245,255,0.55)'; g.lineWidth = 2;
-    g.strokeRect(pad + 5, pad + 5, w - 10, w - 10);
-    // corner nodes
-    g.fillStyle = '#aef3ff';
-    for (const [x, y] of [[pad, pad], [s - pad, pad], [pad, s - pad], [s - pad, s - pad]]) {
-      g.beginPath(); g.arc(x, y, 3.4, 0, 6.3); g.fill();
+    g.strokeStyle = line; g.lineWidth = 6; g.lineJoin = 'round'; g.strokeRect(pad, pad, w, w);
+    g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 2; g.strokeRect(pad + 5, pad + 5, w - 10, w - 10);
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+    this.panelCache.set(variant, tex); return tex;
+  }
+
+  // distance-from-start tier (0..2) per tile; -1 for void
+  private tierMap(): Int32Array {
+    const { tw, th, tiles, start } = this.run;
+    const dist = new Int32Array(tw * th).fill(-1);
+    const q = [start.row * tw + start.col]; dist[q[0]] = 0; let maxD = 1;
+    for (let h = 0; h < q.length; h++) {
+      const k = q[h], c = k % tw, r = (k / tw) | 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nc = c + dx, nr = r + dy; if (nc < 0 || nr < 0 || nc >= tw || nr >= th) continue;
+        const nk = nr * tw + nc; if (tiles[nk] === 1 && dist[nk] < 0) { dist[nk] = dist[k] + 1; maxD = Math.max(maxD, dist[nk]); q.push(nk); }
+      }
     }
-    const tex = new THREE.CanvasTexture(cv);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
+    const tier = new Int32Array(tw * th).fill(-1);
+    for (let i = 0; i < dist.length; i++) if (dist[i] >= 0) tier[i] = Math.min(2, Math.floor((dist[i] / maxD) * 2.999));
+    return tier;
+  }
+
+  private hash(n: number): number {
+    n = (n ^ 61) ^ (n >>> 16); n = n + (n << 3); n = n ^ (n >>> 4);
+    n = Math.imul(n, 0x27d4eb2d); n = n ^ (n >>> 15); return n >>> 0;
+  }
+
+  // tier of a void tile = tier of an adjacent road tile (for tinting flanking props)
+  private nearestTier(c: number, r: number, tier: Int32Array): number {
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const k = (r + dy) * this.run.tw + (c + dx);
+      if (k >= 0 && k < tier.length && tier[k] >= 0) return tier[k];
+    }
+    return 0;
+  }
+
+  // scatter decorative pylons (in the void, flanking roads) + floating data-cores
+  // (over junction hubs). Procedural by default; the GLB models swap in if loaded.
+  private buildProps(tier: Int32Array, nbCount: (c: number, r: number) => number) {
+    const run = this.run;
+    let pyl = 0, core = 0;
+    for (let r = 0; r < run.th; r++) for (let c = 0; c < run.tw; c++) {
+      const k = r * run.tw + c;
+      if (run.tiles[k] === 1) continue;
+      const borders = isFloor(run, c + 1, r) || isFloor(run, c - 1, r) || isFloor(run, c, r + 1) || isFloor(run, c, r - 1);
+      if (!borders || pyl >= 24) continue;
+      if (this.hash(k * 7 + 1) % 5 !== 0) continue; // ~1 in 5 flanking void tiles
+      const color = TIER_COLORS[this.nearestTier(c, r, tier)];
+      const obj = this.makePylon(color);
+      obj.position.set(this.wx(c), 0, this.wz(r));
+      this.scene.add(obj);
+      this.decor.push({ obj, type: 'pylon', spin: 0, baseY: 0, bob: 0 });
+      pyl++;
+    }
+    for (let r = 0; r < run.th; r++) for (let c = 0; c < run.tw; c++) {
+      const k = r * run.tw + c;
+      if (run.tiles[k] !== 1 || nbCount(c, r) < 3 || core >= 16) continue;
+      if (this.hash(k * 13 + 5) % 2 !== 0) continue;
+      const color = TIER_COLORS[Math.max(0, tier[k])];
+      const obj = this.makeCore(color);
+      const y = 3.1; obj.position.set(this.wx(c), y, this.wz(r));
+      this.scene.add(obj);
+      this.decor.push({ obj, type: 'core', spin: 0.5, baseY: y, bob: this.hash(k) % 628 / 100 });
+      core++;
+    }
+    void this.loadProps();
+  }
+
+  // a tall neon server-pylon rising out of the void beside the road
+  private makePylon(color: number): THREE.Group {
+    const grp = new THREE.Group();
+    const dark = new THREE.MeshStandardMaterial({ color: 0x0c1428, emissive: new THREE.Color(color).multiplyScalar(0.12), roughness: 0.8 });
+    const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.7, 4.6, 0.7), dark);
+    shaft.position.y = 0.4; grp.add(shaft);
+    const band = new THREE.MeshStandardMaterial({ color: 0x0c1428, emissive: new THREE.Color(color), emissiveIntensity: 1.4, roughness: 0.5 });
+    for (const by of [-1.2, 0.2, 1.6]) {
+      const b = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.18, 0.82), band);
+      b.position.y = 0.4 + by; grp.add(b);
+    }
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.26, 12, 12),
+      new THREE.MeshBasicMaterial({ color }));
+    tip.position.y = 2.95; grp.add(tip);
+    return grp;
+  }
+
+  // a floating data-core: glowing diamond inside a ring
+  private makeCore(color: number): THREE.Group {
+    const grp = new THREE.Group();
+    const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.5),
+      new THREE.MeshStandardMaterial({ color: 0x0c1428, emissive: new THREE.Color(color), emissiveIntensity: 1.3, roughness: 0.4 }));
+    grp.add(core);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.06, 8, 28),
+      new THREE.MeshStandardMaterial({ color: 0x0c1428, emissive: new THREE.Color(color), emissiveIntensity: 1.1 }));
+    ring.rotation.x = Math.PI / 2.4; grp.add(ring);
+    return grp;
+  }
+
+  // swap the AI-generated prop GLBs in for the procedural ones (best-effort)
+  private async loadProps() {
+    const swap = async (type: 'pylon' | 'core', url: string, targetH: number, baseY: number) => {
+      try {
+        const gltf = await new GLTFLoader().loadAsync(url);
+        const model = gltf.scene;
+        const bb = new THREE.Box3().setFromObject(model);
+        const size = new THREE.Vector3(); bb.getSize(size);
+        const center = new THREE.Vector3(); bb.getCenter(center);
+        const scale = targetH / (Math.max(size.x, size.y, size.z) || 1);
+        model.scale.setScalar(scale);
+        model.position.set(-center.x * scale, -bb.min.y * scale, -center.z * scale);
+        model.traverse((o) => {
+          const mesh = o as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          const mm = mesh.material as THREE.MeshStandardMaterial;
+          if (mm) { mm.emissive = new THREE.Color(0x2a4a7a); mm.emissiveMap = mm.map ?? null; mm.emissiveIntensity = 0.85; mm.needsUpdate = true; }
+        });
+        for (const d of this.decor) {
+          if (d.type !== type) continue;
+          const pos = d.obj.position.clone();
+          this.scene.remove(d.obj);
+          const inst = model.clone(true);
+          inst.position.copy(pos); inst.position.y = baseY;
+          this.scene.add(inst);
+          d.obj = inst;
+        }
+      } catch { /* keep procedural */ }
+    };
+    await Promise.all([
+      swap('pylon', '/models/pylon.glb', 5.2, 0),
+      swap('core', '/models/datacore.glb', 1.9, 3.1),
+    ]);
   }
 
   // radial dark-blue → black void backdrop
@@ -472,6 +635,11 @@ export class DungeonScene {
 
     // token bob/spin
     for (const tk of this.tokens.values()) tk.sprite.position.y = tk.baseY + Math.sin(t * 2.2 + tk.phase) * 0.18;
+
+    // decorative props: spin + bob the floating data-cores
+    for (const d of this.decor) {
+      if (d.spin) { d.obj.rotation.y += dt * d.spin; d.obj.position.y = d.baseY + Math.sin(t * 1.3 + d.bob) * 0.2; }
+    }
 
     // drift data-motes upward around the player, wrapping
     const arr = this.motes.geometry.getAttribute('position') as THREE.BufferAttribute;
