@@ -20,6 +20,7 @@ import {
 } from './chips.ts';
 import { equippedEffects, type AggregatedEffects } from './navicust.ts';
 import { recordBattle } from './tide.ts';
+import { chipArtURL } from './chipart.ts';
 import { playSfx, sfxForChip } from './sfx.ts';
 import type { Session } from './wallet.ts';
 
@@ -632,7 +633,7 @@ export class BattleScene {
 
     const q = this.hud.querySelector('#queue') as HTMLElement;
     q.innerHTML = this.queue
-      .map((c) => `<div class="qchip"><div>${c.icon}</div><div>${c.name}</div><div class="dmg">${c.kind === 'recover' ? '+' : ''}${c.damage}</div><div>${c.code}</div></div>`)
+      .map((c) => `<div class="qchip" ${c.paId ? `data-chip-pa="${c.paId}"` : `data-chip-kind="${c.kind}"`}><div><img class="qchip-art" src="${chipArtURL(c.kind)}" alt=""></div><div>${c.name}</div><div class="dmg">${c.kind === 'recover' ? '+' : ''}${c.damage}</div><div>${c.code}</div></div>`)
       .join('');
   }
 
@@ -681,12 +682,13 @@ export class BattleScene {
         card.innerHTML = `
           <div class="cardnum">${i + 1}</div>
           <div class="cost${discounted ? ' disc' : ''}">${c}⚡</div>
-          <div class="icon">${chip.icon}</div>
+          <div class="icon"><img class="cw-art" src="${chipArtURL(chip.kind)}" alt=""></div>
           <div class="name">${chip.name}</div>
           <div class="dmg">${chip.kind === 'recover' || chip.kind === 'megaheal' ? '+' : ''}${chip.damage || ''}</div>
           <div class="code">${chip.code === '*' ? '✷' : chip.code}</div>`;
         card.onclick = () => toggle(chip);
         card.dataset.idx = String(i);
+        card.dataset.chipKind = chip.kind;
         handEl.appendChild(card);
       });
       (this.customWindow.querySelector('[data-act="confirm"]') as HTMLElement).onclick = () => commit(true);

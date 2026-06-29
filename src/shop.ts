@@ -8,6 +8,7 @@ import {
 } from './chips.ts';
 import { getCredits, addCredits } from './characters.ts';
 import { getWins, getUnlockedChips, unlockChip } from './progress.ts';
+import { chipArtURL } from './chipart.ts';
 
 const CLS_COLOR: Record<ChipClass, string> = {
   strike: '#ff8f6b', guard: '#6bd0ff', breach: '#d98bff',
@@ -73,9 +74,9 @@ export function openChipShop(container: HTMLElement, onClose?: () => void) {
       : gated ? `<div class="shop-btn gated">🔒 Win ${u.wins} <span class="db-dim">(${wins}/${u.wins})</span></div>`
       : afford ? `<div class="shop-btn buy">BUY ◈${price}${onDeal ? ` <s>${u.cost}</s>` : ''}</div>`
       : `<div class="shop-btn poor">◈${price} — need more</div>`;
-    return `<div class="shop-card ${state}" ${attr} title="${d.desc}">
+    return `<div class="shop-card ${state}" ${attr} data-chip-kind="${k}">
       ${rar}${deal}
-      <div class="shop-cardtop"><span class="shop-ic">${d.icon}</span><span class="db-cost">${d.cost}⚡</span></div>
+      <div class="shop-cardtop"><img class="shop-ic-art" src="${chipArtURL(k)}" alt=""><span class="db-cost">${d.cost}⚡</span></div>
       <div class="shop-name" style="color:${CLS_COLOR[d.cls]}">${d.name}</div>
       <div class="shop-meta"><span style="color:${CLS_COLOR[d.cls]}">${d.cls}</span>${d.damage ? ' · ' + (HEAL_KINDS.has(k) ? '+' : '') + d.damage : ''}</div>
       <div class="shop-desc">${d.desc.replace(/\s*\([^)]*\)\s*$/, '')}</div>

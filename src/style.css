@@ -497,6 +497,39 @@ kbd {
 .shop-cardtop { display: flex; justify-content: space-between; align-items: center; font-size: 15px; }
 .shop-ic { font-size: 20px; }
 .shop-name { font-weight: 700; font-size: 13px; }
+
+/* ---------------- custom chip art thumbnails ---------------- */
+.db-cardart { width: 34px; height: 34px; border-radius: 6px; image-rendering: auto; display: block; }
+.db-ic-art { width: 24px; height: 24px; border-radius: 5px; flex: 0 0 auto; }
+.db-paic-art { width: 26px; height: 26px; border-radius: 5px; }
+.shop-ic-art { width: 32px; height: 32px; border-radius: 6px; display: block; }
+.chipcard .icon { display: flex; justify-content: center; }
+.cw-art { width: 46px; height: 46px; border-radius: 7px; }
+.qchip-art { width: 24px; height: 24px; border-radius: 5px; }
+
+/* ---------------- chip hover tooltip ---------------- */
+.chiptip {
+  position: fixed; z-index: 9999; pointer-events: none;
+  display: flex; gap: 12px; width: 320px; padding: 12px;
+  background: linear-gradient(160deg, rgba(12,18,36,.98), rgba(8,10,22,.98));
+  border: 1px solid #3a4f86; border-radius: 12px;
+  box-shadow: 0 16px 50px rgba(0,0,0,.6), 0 0 24px rgba(80,140,255,.18);
+  font: 12px/1.45 ui-monospace, monospace; color: #d7e2f5;
+}
+.chiptip .ct-art { width: 104px; height: 104px; border-radius: 9px; flex: 0 0 auto; box-shadow: 0 0 18px rgba(80,160,255,.25); }
+.chiptip .ct-body { min-width: 0; flex: 1; }
+.chiptip .ct-name { font-size: 16px; font-weight: 800; letter-spacing: .02em; margin-bottom: 6px; }
+.chiptip .ct-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+.chiptip .ct-cls { font-size: 10px; font-weight: 800; letter-spacing: .08em; padding: 2px 7px; border: 1px solid; border-radius: 5px; }
+.chiptip .ct-rar { font-size: 10px; font-weight: 800; letter-spacing: .06em; padding: 2px 7px; border-radius: 5px; }
+.chiptip .ct-rar.std { background: #1c2c4a; color: #9fb6dc; }
+.chiptip .ct-rar.mega { background: #3a2a5a; color: #d4b6ff; }
+.chiptip .ct-rar.giga { background: #4a3a10; color: #ffd86b; }
+.chiptip .ct-rar.pa { background: #4a3a10; color: #ffd86b; }
+.chiptip .ct-stat { font-size: 12px; font-weight: 700; color: #ffd86b; }
+.chiptip .ct-desc { color: #b9c8e6; }
+.chiptip .ct-recipe { color: #ffd86b; font-weight: 700; margin-bottom: 6px; }
+.chiptip .ct-unlock { margin-top: 8px; color: #ff9d6b; font-weight: 700; }
 .shop-meta { font-size: 10px; opacity: .85; }
 .shop-desc { font-size: 10px; color: #93a6c8; line-height: 1.35; min-height: 26px; }
 .shop-btn { margin-top: 4px; text-align: center; font-size: 11px; font-weight: 800; letter-spacing: .04em;

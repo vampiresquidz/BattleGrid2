@@ -11,6 +11,7 @@ import {
 import { getCredits, addCredits } from './characters.ts';
 import { getWins, getUnlockedChips, unlockChip } from './progress.ts';
 import { PROGRAMS, memBudget, memUsed, getEquipped, toggleProgram } from './navicust.ts';
+import { chipArtURL, paArtURL } from './chipart.ts';
 
 const CLS_COLOR: Record<ChipClass, string> = {
   strike: '#ff8f6b', guard: '#6bd0ff', breach: '#d98bff',
@@ -95,8 +96,9 @@ export function openDeckBuilder(container: HTMLElement, onClose?: () => void) {
     const rows = PROGRAM_ADVANCES.map((pa) => {
       const recipe = pa.recipe.map((k) => CHIP_DEFS[k].icon).join(' + ');
       const names = pa.recipe.map((k) => CHIP_DEFS[k].name).join(' → ');
-      return `<div class="db-parow" title="${names}\n${pa.desc}">
-        <span class="db-paic">${pa.icon}</span>
+      void names;
+      return `<div class="db-parow" data-chip-pa="${pa.id}">
+        <img class="db-paic-art" src="${paArtURL(pa.id, pa.icon)}" alt="">
         <span class="db-paname">${pa.name}</span>
         <span class="db-parecipe">${recipe}</span>
       </div>`;
@@ -122,13 +124,13 @@ export function openDeckBuilder(container: HTMLElement, onClose?: () => void) {
       const foot = gated
         ? `<div class="db-lockreq">🔒 Win ${u.wins} <span class="db-dim">(${wins}/${u.wins})</span></div>`
         : `<div class="db-lockreq">${afford ? 'UNLOCK' : 'NEED'} ◈${u.cost}</div>`;
-      return `<div class="${cls}" ${attr} title="${d.desc}">${rar}
-        <div class="db-cardtop"><span>${d.icon}</span><span class="db-cost">${d.cost}⚡</span></div>
+      return `<div class="${cls}" ${attr} data-chip-kind="${k}">${rar}
+        <div class="db-cardtop"><img class="db-cardart" src="${chipArtURL(k)}" alt=""><span class="db-cost">${d.cost}⚡</span></div>
         <div class="db-cardname" style="color:${CLS_COLOR[d.cls]}">${d.name}</div>${meta}${foot}</div>`;
     }
     const full = have >= max || deck.length >= DECK_SIZE;
-    return `<div class="db-card${full ? ' db-full' : ''}" data-add="${k}" title="${d.desc}">${rar}
-      <div class="db-cardtop"><span>${d.icon}</span><span class="db-cost">${d.cost}⚡</span></div>
+    return `<div class="db-card${full ? ' db-full' : ''}" data-add="${k}" data-chip-kind="${k}">${rar}
+      <div class="db-cardtop"><img class="db-cardart" src="${chipArtURL(k)}" alt=""><span class="db-cost">${d.cost}⚡</span></div>
       <div class="db-cardname" style="color:${CLS_COLOR[d.cls]}">${d.name}</div>${meta}
       <div class="db-have">${have}/${max}</div></div>`;
   }
@@ -175,8 +177,8 @@ export function openDeckBuilder(container: HTMLElement, onClose?: () => void) {
       .sort((a, b) => CLS_ORDER.indexOf(CHIP_DEFS[a.kind].cls) - CLS_ORDER.indexOf(CHIP_DEFS[b.kind].cls))
       .map((g) => {
         const d = CHIP_DEFS[g.kind];
-        return `<div class="db-row" data-rm="${g.kind}|${g.code}" title="click to remove one">
-          <span class="db-ic">${d.icon}</span>
+        return `<div class="db-row" data-rm="${g.kind}|${g.code}" data-chip-kind="${g.kind}">
+          <img class="db-ic-art" src="${chipArtURL(g.kind)}" alt="">
           <span class="db-nm" style="color:${CLS_COLOR[d.cls]}">${d.name}</span>
           <span class="db-cd">${g.code === '*' ? '✷' : g.code}</span>
           <span class="db-ct">×${g.n}</span>

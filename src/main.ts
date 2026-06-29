@@ -18,8 +18,12 @@ import { openSettings } from './settings.ts';
 import { DungeonScene } from './dungeonScene.ts';
 import { startDungeonRun, getRun, endDungeonRun, summary as dungeonSummary } from './dungeon.ts';
 import { addCredits } from './characters.ts';
+import { initChipTooltips } from './chipTooltip.ts';
 
 const app = document.getElementById('app')!;
+
+// rich hover tooltips for any chip card (deck builder, shop, battle hand)
+initChipTooltips();
 
 // SFX: preload + a global click blip on interactive controls
 initSfx();
