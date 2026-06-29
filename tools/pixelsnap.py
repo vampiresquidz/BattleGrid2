@@ -85,7 +85,7 @@ def detect_pitch(rgb: np.ndarray) -> tuple[int, int]:
 
 def snap_image(src: Path, out: Path, colors: int = 16, pixel_size: int | None = None,
                upscale: int = 1, size: int | None = None, key: str | None = None,
-               alpha_thresh: int = 128) -> tuple[int, int]:
+               alpha_thresh: int = 128, fill_holes: bool = True) -> tuple[int, int]:
     img = Image.open(src).convert("RGBA")
     if key:
         rgb = detect_bg(img) if key == "auto" else KEYS[key]
@@ -115,6 +115,13 @@ def snap_image(src: Path, out: Path, colors: int = 16, pixel_size: int | None = 
     quant = pal[km.labels_].reshape(out_h, out_w, 3)
 
     alpha = (arr[:, :, 3] >= alpha_thresh).astype(np.uint8) * 255
+    if fill_holes:
+        # close interior transparent holes the chroma key punched in the body
+        # (they keep their quantized colour underneath — just make them opaque)
+        from scipy import ndimage
+        m = alpha > 0
+        filled = ndimage.binary_fill_holes(m)
+        alpha[filled & ~m] = 255
     final = np.dstack([quant, alpha]).astype(np.uint8)
     res = Image.fromarray(final)
 
@@ -136,6 +143,7 @@ def main():
     ap.add_argument("--upscale", type=int, default=1, help="nearest-neighbour upscale factor")
     ap.add_argument("--key", choices=list(KEYS), default=None, help="chroma-key this screen colour to alpha")
     ap.add_argument("--alpha-thresh", type=int, default=128)
+    ap.add_argument("--no-fill", action="store_true", help="don't fill interior chroma-key holes")
     args = ap.parse_args()
 
     inp, outp = Path(args.input), Path(args.output)
@@ -144,10 +152,10 @@ def main():
         for f in sorted(inp.iterdir()):
             if f.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"):
                 w, h = snap_image(f, outp / (f.stem + ".png"), args.colors, args.pixel_size,
-                                  args.upscale, args.size, args.key, args.alpha_thresh)
+                                  args.upscale, args.size, args.key, args.alpha_thresh, not args.no_fill)
                 print(f"{f.name} -> {w}x{h}")
     else:
-        w, h = snap_image(inp, outp, args.colors, args.pixel_size, args.upscale, args.size, args.key, args.alpha_thresh)
+        w, h = snap_image(inp, outp, args.colors, args.pixel_size, args.upscale, args.size, args.key, args.alpha_thresh, not args.no_fill)
         print(f"snapped -> {outp}  ({w}x{h} logical, x{args.upscale})")
 
 

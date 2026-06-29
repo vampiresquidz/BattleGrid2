@@ -539,12 +539,40 @@ export class OverworldScene {
       g.add(rock);
     }
     this.scene.add(g);
+    // warm fill so the cave mouth reads against the night void
+    const cl = new THREE.PointLight(0xffc89a, 16, 26);
+    cl.position.set(x, 7, z + 4);
+    this.scene.add(cl);
+    void this.loadCaveModel(x, z, g); // swap in the AI 3D cave entrance if it loads
     // green sewer glow + the interact marker at the mouth
     const orb = this.makeSprite(orbTexture('#d6ffcf', '#39c46a'), 2.8);
     this.addActor(orb, x, z + 1.0, 2.2, 3.2,
       () => 'Enter THE WARRENS ·  🐀',
       () => this.opts.onPortal?.('rat'), 0.18);
     this.obstacles.push({ x, z: z - 0.7, rx: 3.4, rz: 1.6 }); // can't walk through the rocks
+  }
+
+  // Replace the procedural rock arch with the Trellis-generated cave-mouth GLB.
+  private async loadCaveModel(x: number, z: number, fallback: THREE.Group) {
+    try {
+      const gltf = await new GLTFLoader().loadAsync('/models/cave.glb');
+      const model = gltf.scene;
+      const bb = new THREE.Box3().setFromObject(model);
+      const size = new THREE.Vector3(); bb.getSize(size);
+      const center = new THREE.Vector3(); bb.getCenter(center);
+      const scale = 8.5 / (Math.max(size.x, size.y, size.z) || 1);
+      model.scale.setScalar(scale);
+      model.position.set(x - center.x * scale, -bb.min.y * scale, z - center.z * scale);
+      model.rotation.y = Math.PI; // face the mouth toward the plaza (+z / player side)
+      model.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const mm = mesh.material as THREE.MeshStandardMaterial;
+        if (mm) { mm.emissive = new THREE.Color(0x2e2618); mm.emissiveMap = mm.map ?? null; mm.emissiveIntensity = 0.7; mm.needsUpdate = true; }
+      });
+      this.scene.remove(fallback);
+      this.scene.add(model);
+    } catch { /* keep the procedural rock arch */ }
   }
 
   private buildShards() {
