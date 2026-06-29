@@ -9,9 +9,10 @@
 // tears the DungeonScene down and rebuilds it on return, so the maze, cleared
 // nodes, collected loot and explored tiles must survive here between scenes —
 // the same reason the overworld keeps its progress in progress.ts.
-import { ENEMY_COUNT } from './battle.ts';
+import { ENEMY_COUNT, RAT_DUNGEON } from './battle.ts';
 
 export type NodeKind = 'enemy' | 'loot' | 'boss';
+export type DungeonTheme = 'net' | 'rat';
 
 export interface DungeonNode {
   kind: NodeKind;
@@ -31,6 +32,7 @@ export interface DungeonRun {
   boss: { col: number; row: number };
   bossName: string;
   depth: number;                   // dungeon level (scales reward/difficulty)
+  theme: DungeonTheme;             // 'net' = default Net look, 'rat' = the Warrens
   creditsLooted: number;           // ◈ grabbed this run (loot, not battle bounties)
   enemiesCleared: number;
   bossDown: boolean;
@@ -61,10 +63,10 @@ const randInt = (n: number) => Math.floor(Math.random() * n);
 const pick = <T>(a: T[]): T => a[randInt(a.length)];
 
 // Enemy roster indices by difficulty tier (deeper rooms → nastier processes).
-// Clamped to whatever the roster actually has.
-function poolFor(tier: number): number[] {
-  const tiers = [[0, 1, 2], [3, 4, 5], [6, 7, 8, 9]];
-  const t = tiers[Math.max(0, Math.min(tiers.length - 1, tier))].filter((i) => i < ENEMY_COUNT);
+// Clamped to whatever the roster actually has; the rat theme uses its own pools.
+function poolFor(tier: number, theme: DungeonTheme): number[] {
+  const tiers = theme === 'rat' ? RAT_DUNGEON.tiers : [[0, 1, 2], [3, 4, 5], [6, 7, 8, 9]];
+  const t = tiers[Math.max(0, Math.min(tiers.length - 1, tier))].filter((i) => i >= 0 && i < ENEMY_COUNT);
   return t.length ? t : [0];
 }
 
@@ -126,7 +128,7 @@ function distances(tw: number, th: number, tiles: Uint8Array, sc: number, sr: nu
 }
 
 // Generate a fresh maze and stock it. depth lightly scales size/reward.
-export function startDungeonRun(depth = 1): DungeonRun {
+export function startDungeonRun(depth = 1, theme: DungeonTheme = 'net'): DungeonRun {
   const cw = 6 + Math.min(2, depth - 1);
   const ch = 6 + Math.min(2, depth - 1);
   const { tw, th, tiles } = carve(cw, ch);
@@ -150,14 +152,16 @@ export function startDungeonRun(depth = 1): DungeonRun {
       const tier = Math.max(0, Math.min(2, Math.floor((dist[k] / maxD) * 2.999)));
       const roll = Math.random();
       if (roll < 0.4) {
-        nodes.set(k, { kind: 'enemy', enemyIndex: pick(poolFor(tier)) });
+        nodes.set(k, { kind: 'enemy', enemyIndex: pick(poolFor(tier, theme)) });
       } else if (roll < 0.66) {
         nodes.set(k, { kind: 'loot', reward: 25 + tier * 35 + randInt(4) * 10 + (depth - 1) * 20 });
       }
     }
   }
-  // boss: a top-tier process with a big bounty
-  const bossIdx = ENEMY_COUNT > 1 ? Math.max(0, ENEMY_COUNT - 1 - randInt(2)) : 0;
+  // boss: a top-tier process with a big bounty (themed for special dungeons)
+  const bossIdx = theme === 'rat' && RAT_DUNGEON.boss >= 0
+    ? RAT_DUNGEON.boss
+    : (ENEMY_COUNT > 1 ? Math.max(0, ENEMY_COUNT - 1 - randInt(2)) : 0);
   nodes.set(bossK, { kind: 'boss', enemyIndex: bossIdx, reward: 300 + depth * 150 });
 
   run = {
@@ -166,8 +170,8 @@ export function startDungeonRun(depth = 1): DungeonRun {
     player: { col: scol, row: srow },
     start: { col: scol, row: srow },
     boss: { col: bcol, row: brow },
-    bossName: pick(BOSS_NAMES),
-    depth,
+    bossName: theme === 'rat' ? RAT_DUNGEON.bossName : pick(BOSS_NAMES),
+    depth, theme,
     creditsLooted: 0,
     enemiesCleared: 0,
     bossDown: false,

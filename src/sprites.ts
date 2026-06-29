@@ -47,6 +47,13 @@ export const textures = {
   trainerAtk: () => loadPixel('/sprites/enemy_trainer_attack.png'),
   crawler: () => loadPixel('/sprites/enemy_crawler.png'),
   crawlerAtk: () => loadPixel('/sprites/enemy_crawler_attack.png'),
+  // rat mob — made with the genimg → pixelsnap pixel-art pipeline
+  packetrat: () => loadPixel('/sprites/enemy_packetrat.png'),
+  packetratAtk: () => loadPixel('/sprites/enemy_packetrat_attack.png'),
+  plaguerat: () => loadPixel('/sprites/enemy_plaguerat.png'),
+  plagueratAtk: () => loadPixel('/sprites/enemy_plaguerat_attack.png'),
+  ratking: () => loadPixel('/sprites/enemy_ratking.png'),
+  ratkingAtk: () => loadPixel('/sprites/enemy_ratking_attack.png'),
   // Seedance-baked frame strips (square cells) — see tools/seedance.py
   goblinIdleSheet: () => loadPixel('/sprites/anim_goblin_idle.png'),
   goblinAttackSheet: () => loadPixel('/sprites/anim_goblin_attack.png'),

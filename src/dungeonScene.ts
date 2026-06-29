@@ -40,9 +40,29 @@ export interface DungeonOpts {
 }
 
 const TILE = 2.4;
-// biome tint by distance-from-start tier: the maze shifts cyan → magenta → amber
-// as you push deeper toward the boss core.
-const TIER_COLORS = [0x37c8ff, 0xc46bff, 0xffb24a];
+// Per-theme look. `tiers` tints the maze by distance-from-start (it shifts colour
+// as you push toward the boss). 'net' = the neon Net; 'rat' = the Warrens, a
+// grimy torchlit cave/sewer.
+interface ThemeCfg {
+  tiers: number[]; fog: number; bg: [string, string, string];
+  ambient: number; ambientI: number; key: number; keyI: number;
+  torch: number; torchI: number; torchRange: number;
+  panelDark: [string, string]; panelBase: number; grid: [number, number];
+}
+const THEMES: Record<string, ThemeCfg> = {
+  net: {
+    tiers: [0x37c8ff, 0xc46bff, 0xffb24a], fog: 0x02030a, bg: ['#0a1430', '#050a1c', '#01020a'],
+    ambient: 0x4a5894, ambientI: 1.1, key: 0xbfd4ff, keyI: 0.5,
+    torch: 0x8fe0ff, torchI: 14, torchRange: TILE * 8,
+    panelDark: ['#12224a', '#0b1530'], panelBase: 0x16294f, grid: [0x1a3a6a, 0x0e2046],
+  },
+  rat: {
+    tiers: [0xc8954a, 0x8fae3a, 0xc4452f], fog: 0x0a0703, bg: ['#241a10', '#120c06', '#050302'],
+    ambient: 0x4a3a26, ambientI: 1.0, key: 0xffd8a0, keyI: 0.4,
+    torch: 0xffce8a, torchI: 24, torchRange: TILE * 9,
+    panelDark: ['#2a2114', '#15100a'], panelBase: 0x2a2014, grid: [0x4a3a1a, 0x2a1e0e],
+  },
+};
 
 export class DungeonScene {
   private renderer: THREE.WebGLRenderer;
@@ -59,6 +79,7 @@ export class DungeonScene {
   private motes!: THREE.Points;
   private decor: Array<{ obj: THREE.Object3D; type: 'pylon' | 'core'; spin: number; baseY: number; bob: number }> = [];
   private panelCache = new Map<string, THREE.Texture>();
+  private cfg: ThemeCfg = THEMES.net;
   private cur = new THREE.Vector2();      // current world pos (x,z)
   private targetTile: { col: number; row: number };
   private pendingArrive = false;
@@ -117,23 +138,23 @@ export class DungeonScene {
 
   private build() {
     const run = this.run;
-    // Mega Man Battle Network "Net" look: glowing data-roads suspended in a black
-    // cyber-void. Panels light themselves (emissive + bloom) so the void stays dark.
-    this.scene.fog = new THREE.Fog(0x02030a, TILE * 8, TILE * 22);
+    const C = this.cfg = THEMES[run.theme] ?? THEMES.net;
+    // 'net' = glowing data-roads in a black cyber-void; 'rat' = a grimy torchlit
+    // warren. Panels light themselves (emissive + bloom) so the dark reads.
+    this.scene.fog = new THREE.Fog(C.fog, TILE * 8, TILE * 22);
     this.scene.background = this.voidBackground();
 
-    this.scene.add(new THREE.AmbientLight(0x4a5894, 1.1));
-    // a soft cool key + a gentle follow glow (panels do most of the lighting)
-    const key = new THREE.DirectionalLight(0xbfd4ff, 0.5);
+    this.scene.add(new THREE.AmbientLight(C.ambient, C.ambientI));
+    const key = new THREE.DirectionalLight(C.key, C.keyI);
     key.position.set(-4, 12, 6);
     this.scene.add(key);
-    this.torch = new THREE.PointLight(0x8fe0ff, 14, TILE * 8, 1.6);
+    this.torch = new THREE.PointLight(C.torch, C.torchI, C.torchRange, 1.6);
     this.torch.position.set(0, 4.5, 0);
     this.scene.add(this.torch);
 
     // deep wire-grid floor far below, glimpsed through the gaps between roads —
-    // the classic "suspended over the Net" depth cue.
-    const grid = new THREE.GridHelper(TILE * Math.max(run.tw, run.th) * 2.2, 48, 0x1a3a6a, 0x0e2046);
+    // the "suspended over the Net" / cavern-floor depth cue.
+    const grid = new THREE.GridHelper(TILE * Math.max(run.tw, run.th) * 2.2, 48, C.grid[0], C.grid[1]);
     grid.position.y = -9;
     (grid.material as THREE.Material).transparent = true;
     (grid.material as THREE.Material).opacity = 0.5;
@@ -169,8 +190,8 @@ export class DungeonScene {
       const [tStr, v] = gk.split(':');
       const tex = this.panelTex(v);
       const mat = new THREE.MeshStandardMaterial({
-        map: tex, emissiveMap: tex, emissive: new THREE.Color(TIER_COLORS[+tStr]),
-        emissiveIntensity: 0.7, color: 0x16294f, roughness: 0.9, metalness: 0.1,
+        map: tex, emissiveMap: tex, emissive: new THREE.Color(this.cfg.tiers[+tStr]),
+        emissiveIntensity: 0.7, color: this.cfg.panelBase, roughness: 0.9, metalness: 0.1,
       });
       const mesh = new THREE.InstancedMesh(floorGeo, mat, keys.length);
       keys.forEach((k, i) => {
@@ -201,7 +222,7 @@ export class DungeonScene {
     }
     railByTier.forEach((mats, t) => {
       if (!mats.length) return;
-      const mat = new THREE.MeshStandardMaterial({ color: 0x0a1830, emissive: new THREE.Color(TIER_COLORS[t]), emissiveIntensity: 1.5, roughness: 0.6 });
+      const mat = new THREE.MeshStandardMaterial({ color: 0x0a1830, emissive: new THREE.Color(this.cfg.tiers[t]), emissiveIntensity: 1.5, roughness: 0.6 });
       const mesh = new THREE.InstancedMesh(railGeo, mat, mats.length);
       mats.forEach((mm, i) => mesh.setMatrixAt(i, mm));
       mesh.instanceMatrix.needsUpdate = true;
@@ -247,12 +268,13 @@ export class DungeonScene {
   // material's emissive tier-colour tints it). plain = crosshatch, node = a hub
   // emblem for junctions, circuit = traces. Cached per variant.
   private panelTex(variant: string): THREE.Texture {
-    const hit = this.panelCache.get(variant); if (hit) return hit;
+    const key = this.run.theme + ':' + variant;
+    const hit = this.panelCache.get(key); if (hit) return hit;
     const s = 128;
     const cv = document.createElement('canvas'); cv.width = cv.height = s;
     const g = cv.getContext('2d')!;
     const bg = g.createLinearGradient(0, 0, s, s);
-    bg.addColorStop(0, '#12224a'); bg.addColorStop(1, '#0b1530');
+    bg.addColorStop(0, this.cfg.panelDark[0]); bg.addColorStop(1, this.cfg.panelDark[1]);
     g.fillStyle = bg; g.fillRect(0, 0, s, s);
     const line = 'rgba(220,244,255,0.95)';
     if (variant === 'node') {
@@ -281,7 +303,7 @@ export class DungeonScene {
     g.strokeStyle = line; g.lineWidth = 6; g.lineJoin = 'round'; g.strokeRect(pad, pad, w, w);
     g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 2; g.strokeRect(pad + 5, pad + 5, w - 10, w - 10);
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
-    this.panelCache.set(variant, tex); return tex;
+    this.panelCache.set(key, tex); return tex;
   }
 
   // distance-from-start tier (0..2) per tile; -1 for void
@@ -326,7 +348,7 @@ export class DungeonScene {
       const borders = isFloor(run, c + 1, r) || isFloor(run, c - 1, r) || isFloor(run, c, r + 1) || isFloor(run, c, r - 1);
       if (!borders || pyl >= 24) continue;
       if (this.hash(k * 7 + 1) % 5 !== 0) continue; // ~1 in 5 flanking void tiles
-      const color = TIER_COLORS[this.nearestTier(c, r, tier)];
+      const color = this.cfg.tiers[this.nearestTier(c, r, tier)];
       const obj = this.makePylon(color);
       obj.position.set(this.wx(c), 0, this.wz(r));
       this.scene.add(obj);
@@ -337,7 +359,7 @@ export class DungeonScene {
       const k = r * run.tw + c;
       if (run.tiles[k] !== 1 || nbCount(c, r) < 3 || core >= 16) continue;
       if (this.hash(k * 13 + 5) % 2 !== 0) continue;
-      const color = TIER_COLORS[Math.max(0, tier[k])];
+      const color = this.cfg.tiers[Math.max(0, tier[k])];
       const obj = this.makeCore(color);
       const y = 3.1; obj.position.set(this.wx(c), y, this.wz(r));
       this.scene.add(obj);
@@ -416,7 +438,7 @@ export class DungeonScene {
     const cv = document.createElement('canvas'); cv.width = cv.height = 256;
     const g = cv.getContext('2d')!;
     const rg = g.createRadialGradient(128, 110, 30, 128, 128, 200);
-    rg.addColorStop(0, '#0a1430'); rg.addColorStop(0.6, '#050a1c'); rg.addColorStop(1, '#01020a');
+    rg.addColorStop(0, this.cfg.bg[0]); rg.addColorStop(0.6, this.cfg.bg[1]); rg.addColorStop(1, this.cfg.bg[2]);
     g.fillStyle = rg; g.fillRect(0, 0, 256, 256);
     const tex = new THREE.CanvasTexture(cv);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -435,7 +457,7 @@ export class DungeonScene {
     }
     g.setAttribute('position', new THREE.BufferAttribute(p, 3));
     const mat = new THREE.PointsMaterial({
-      color: 0x6fe0ff, size: 0.14, transparent: true, opacity: 0.8,
+      color: this.cfg.torch, size: 0.14, transparent: true, opacity: 0.8,
       blending: THREE.AdditiveBlending, depthWrite: false,
     });
     return new THREE.Points(g, mat);
@@ -471,7 +493,8 @@ export class DungeonScene {
   private buildHUD() {
     const title = document.createElement('div');
     title.id = 'dg-title';
-    title.innerHTML = `▣ THE GRID DUNGEON <span class="db-dim">· DEPTH ${this.run.depth}</span>`;
+    const dname = this.run.theme === 'rat' ? '🐀 THE WARRENS' : '▣ THE GRID DUNGEON';
+    title.innerHTML = `${dname} <span class="db-dim">· DEPTH ${this.run.depth}</span>`;
     this.container.appendChild(title); this.dom.push(title);
 
     const credits = document.createElement('div');

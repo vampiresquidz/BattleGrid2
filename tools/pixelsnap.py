@@ -34,15 +34,34 @@ import numpy as np
 from PIL import Image
 from sklearn.cluster import KMeans
 
-KEYS = {"green": (0, 255, 0), "magenta": (255, 0, 255), "blue": (0, 0, 255)}
+KEYS = {"green": (0, 255, 0), "magenta": (255, 0, 255), "blue": (0, 0, 255), "auto": None}
 
 
-def key_screen(img: Image.Image, rgb, tol=110) -> Image.Image:
-    """Make pixels near the chroma colour transparent."""
-    a = np.asarray(img.convert("RGBA")).astype(np.int16)
-    d = np.sqrt(((a[:, :, :3] - np.array(rgb)) ** 2).sum(axis=2))
-    a[d < tol, 3] = 0
-    return Image.fromarray(a.astype(np.uint8))
+def detect_bg(img: Image.Image) -> tuple:
+    """Background colour = median of the four corner patches (subject rarely
+    occupies corners). Robust to whatever shade the image model actually used."""
+    a = np.asarray(img.convert("RGB"))
+    h, w = a.shape[:2]; s = max(4, min(h, w) // 16)
+    patches = np.concatenate([
+        a[:s, :s].reshape(-1, 3), a[:s, -s:].reshape(-1, 3),
+        a[-s:, :s].reshape(-1, 3), a[-s:, -s:].reshape(-1, 3),
+    ])
+    return tuple(int(v) for v in np.median(patches, axis=0))
+
+
+def key_screen(img: Image.Image, rgb, hue_tol=22, sat_min=70, val_min=40) -> Image.Image:
+    """Hue-based chroma key: drop only SATURATED pixels matching the background
+    hue. This removes a green/magenta screen while keeping a desaturated (grey)
+    subject — RGB-distance keying wrongly eats grey subjects near green."""
+    rgba = np.asarray(img.convert("RGBA"))
+    hsv = np.asarray(img.convert("HSV")).astype(np.int16)
+    h, s, v = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
+    bg = np.asarray(Image.new("RGB", (1, 1), tuple(rgb)).convert("HSV"))[0, 0].astype(np.int16)
+    dh = np.abs(h - bg[0]); dh = np.minimum(dh, 256 - dh)
+    mask = (dh < hue_tol) & (s > sat_min) & (v > val_min)
+    out = rgba.copy()
+    out[mask, 3] = 0
+    return Image.fromarray(out)
 
 
 def detect_pitch(rgb: np.ndarray) -> tuple[int, int]:
@@ -69,7 +88,8 @@ def snap_image(src: Path, out: Path, colors: int = 16, pixel_size: int | None = 
                alpha_thresh: int = 128) -> tuple[int, int]:
     img = Image.open(src).convert("RGBA")
     if key:
-        img = key_screen(img, KEYS[key])
+        rgb = detect_bg(img) if key == "auto" else KEYS[key]
+        img = key_screen(img, rgb)
     W, H = img.size
     rgb = np.asarray(img.convert("RGB"))
 

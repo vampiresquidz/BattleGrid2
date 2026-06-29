@@ -91,6 +91,12 @@ export const ALL_SPRITES: string[] = [
   '/sprites/meme_tungtung.png',
   '/sprites/meme_tungtung_attack.png',
   '/sprites/meme_tungtung_attack_chroma.png',
+  '/sprites/enemy_packetrat.png',
+  '/sprites/enemy_packetrat_attack.png',
+  '/sprites/enemy_plaguerat.png',
+  '/sprites/enemy_plaguerat_attack.png',
+  '/sprites/enemy_ratking.png',
+  '/sprites/enemy_ratking_attack.png',
   '/sprites/monkey_back.png',
   '/sprites/monkey_base.png',
   '/sprites/monkey_battle.png',
@@ -136,7 +142,7 @@ export const BATTLE_ASSETS = ALL_SPRITES.filter(
 );
 
 // Enemy roster order (must match ENEMY_ROSTER in battle.ts) → sprite filename key.
-const ENEMY_KEYS = ['tralalero', 'tungtung', 'angler', 'ballerina', 'bombardiro', 'crab', 'hallucination', 'daemon', 'trainer', 'crawler'];
+const ENEMY_KEYS = ['tralalero', 'tungtung', 'angler', 'ballerina', 'bombardiro', 'crab', 'hallucination', 'daemon', 'trainer', 'crawler', 'packetrat', 'plaguerat', 'ratking'];
 // body archetype → its static battle base PNG stem
 const BODY_BATTLE_BASE: Record<string, string> = { humanoid: 'agent_battle', monkey: 'monkey_battle', evilbot: 'robot_battle', cortex: 'cortex_battle' };
 

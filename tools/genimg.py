@@ -39,7 +39,7 @@ def main():
     ap.add_argument("--snap-colors", type=int, default=16)
     ap.add_argument("--snap-size", type=int, default=None, help="output logical resolution NxN (else auto)")
     ap.add_argument("--snap-upscale", type=int, default=8)
-    ap.add_argument("--snap-key", choices=["green", "magenta", "blue"], default=None)
+    ap.add_argument("--snap-key", choices=["green", "magenta", "blue", "auto"], default="auto")
     args = ap.parse_args()
 
     body = {

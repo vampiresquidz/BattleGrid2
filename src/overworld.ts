@@ -106,7 +106,7 @@ export interface PvpInfo {
 export interface OverworldOpts {
   onEncounter: (enemyIndex: number) => void;
   onPvp?: (info: PvpInfo) => void;
-  onPortal?: () => void;   // step into the roguelike dungeon portal
+  onPortal?: (theme: 'net' | 'rat') => void;   // step into a roguelike dungeon portal
 }
 
 // HD-2D alien digital planet: free-roam a large glowing data-continent split into
@@ -359,12 +359,14 @@ export class OverworldScene {
         '"The outer grid and deep sectors hide the rest. Mind the storms."',
       ]));
 
-    // The Dungeon Portal — a swirling rift that drops you into a freshly
-    // generated roguelike maze: loot, processes, and a boss at the core.
+    // The Net Dungeon Portal — a swirling rift into a freshly generated maze.
     const portal = this.makeSprite(orbTexture('#ffd6ff', '#b03aff'), 3.6);
     this.addActor(portal, 0, -7, 2.1, 3.0,
       () => 'Enter the GRID DUNGEON ·  ▣',
-      () => this.opts.onPortal?.(), 0.22);
+      () => this.opts.onPortal?.('net'), 0.22);
+
+    // The Warrens — a cave mouth in the NW corner into the rat-infested dungeon.
+    this.makeCavePortal(-34, -22);
 
     // Data caches — crack for Credits (once, persisted). Reward scales with depth.
     const cacheSpots: Array<[number, number]> = [
@@ -510,6 +512,39 @@ export class OverworldScene {
     for (const o of this.obstacles)
       if (Math.abs(x - o.x) < o.rx + PLAYER_R && Math.abs(z - o.z) < o.rz + PLAYER_R) return true;
     return false;
+  }
+
+  // A cave-mouth portal: a dark rocky arch with a black interior and a sickly
+  // green glow — the entrance to the rat dungeon (THE WARRENS).
+  private makeCavePortal(x: number, z: number) {
+    const g = new THREE.Group(); g.position.set(x, 0, z);
+    // black interior so the mouth reads as a hole into the dark
+    const mouth = new THREE.Mesh(
+      new THREE.CircleGeometry(2.4, 28),
+      new THREE.MeshBasicMaterial({ color: 0x06040a }),
+    );
+    mouth.position.set(0, 2.3, -1.3); // faces +z toward the approaching player
+    g.add(mouth);
+    // chunky dark boulders arching around the mouth
+    const rockMat = new THREE.MeshStandardMaterial({ color: 0x3b332c, roughness: 1, flatShading: true, emissive: 0x0a0805 });
+    const ring: Array<[number, number, number]> = [
+      [-3.1, 0.9, 1.7], [-2.7, 3.0, 1.5], [-1.5, 4.6, 1.6], [0, 5.3, 1.8],
+      [1.5, 4.6, 1.6], [2.7, 3.0, 1.5], [3.1, 0.9, 1.7], [-2.2, 0.5, 1.3], [2.2, 0.5, 1.3],
+    ];
+    for (const [rx, ry, s] of ring) {
+      const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0), rockMat);
+      rock.position.set(rx, ry, -0.6 + Math.random() * 0.4);
+      rock.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+      rock.scale.y *= 1.1;
+      g.add(rock);
+    }
+    this.scene.add(g);
+    // green sewer glow + the interact marker at the mouth
+    const orb = this.makeSprite(orbTexture('#d6ffcf', '#39c46a'), 2.8);
+    this.addActor(orb, x, z + 1.0, 2.2, 3.2,
+      () => 'Enter THE WARRENS ·  🐀',
+      () => this.opts.onPortal?.('rat'), 0.18);
+    this.obstacles.push({ x, z: z - 0.7, rx: 3.4, rz: 1.6 }); // can't walk through the rocks
   }
 
   private buildShards() {

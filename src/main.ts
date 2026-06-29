@@ -151,7 +151,7 @@ async function showOverworld(session: Session, label = 'Loading sector…') {
   overworld = new OverworldScene(app, session, {
     onEncounter: (enemyIndex) => startEncounter(session, enemyIndex),
     onPvp: (info) => startPvp(session, info),
-    onPortal: () => enterDungeon(session),
+    onPortal: (theme) => enterDungeon(session, theme),
   });
 }
 
@@ -161,11 +161,12 @@ async function showOverworld(session: Session, label = 'Loading sector…') {
 // cleared rooms persist across those rebuilds.
 let dungeon: DungeonScene | null = null;
 
-async function enterDungeon(session: Session) {
+async function enterDungeon(session: Session, theme: 'net' | 'rat' = 'net') {
   overworld?.dispose();
   overworld = null;
-  startDungeonRun();
-  await runLoading(app, OVERWORLD_ASSETS, { title: 'JACKING IN', label: 'Generating dungeon…', minMs: 400 });
+  startDungeonRun(1, theme);
+  const label = theme === 'rat' ? 'Descending into the warrens…' : 'Generating dungeon…';
+  await runLoading(app, OVERWORLD_ASSETS, { title: 'JACKING IN', label, minMs: 400 });
   showDungeon(session);
 }
 
@@ -282,7 +283,7 @@ if (params.has('dev')) {
     runLoading(app, battleAssetsFor(idx, [getSelectedBody()]), { title: 'ENGAGING', label: 'Compiling combat node…', minMs: 300 })
       .then(() => { setTouchMode('battle'); return new BattleScene(app, session, { startIndex: idx }); });
   } else if (params.has('dungeon')) {
-    void enterDungeon(session); // jump straight into a fresh roguelike maze
+    void enterDungeon(session, params.get('dungeon') === 'rat' ? 'rat' : 'net'); // jump into a maze
   } else { void showOverworld(session); }
 } else {
   // Resume a Phantom mobile-deeplink login if we're mid-redirect; else show login.

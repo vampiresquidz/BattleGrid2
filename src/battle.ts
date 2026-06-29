@@ -78,9 +78,27 @@ const ENEMY_ROSTER: EnemyDef[] = [
     idleSheet: textures.trainerIdleSheet, idleFrames: 8, idleFps: 9, attackSheet: textures.trainerAtkSheet, attackFrames: 6 },
   { name: 'WEB CRAWLER', tex: textures.crawler, atk: textures.crawlerAtk, hp: 300, scale: 2.7, pattern: 'dash',
     idleSheet: textures.crawlerIdleSheet, idleFrames: 8, idleFps: 9, attackSheet: textures.crawlerAtkSheet, attackFrames: 6 },
+  // --- the rat mob (genimg → pixelsnap pixel-art villains) ---
+  { name: 'PACKET RAT', tex: textures.packetrat, atk: textures.packetratAtk, hp: 240, scale: 2.5, pattern: 'dash' },
+  { name: 'PLAGUE RAT', tex: textures.plaguerat, atk: textures.plagueratAtk, hp: 330, scale: 2.7, pattern: 'shot', status: 'hex', resist: 0.2 },
+  { name: 'RAT KING', tex: textures.ratking, atk: textures.ratkingAtk, hp: 520, scale: 3.1, pattern: 'pincer', status: 'snare', resist: 0.4 },
 ];
 
 export const ENEMY_COUNT = ENEMY_ROSTER.length;
+
+// Themed enemy pools for special dungeons (indices derived by name so they stay
+// correct if the roster is reordered). The rat-themed dungeon uses these.
+const idxByName = (n: string) => ENEMY_ROSTER.findIndex((e) => e.name === n);
+export const RAT_DUNGEON = {
+  name: 'THE WARRENS',
+  bossName: 'THE RAT KING',
+  tiers: [
+    [idxByName('PACKET RAT')],
+    [idxByName('PACKET RAT'), idxByName('PLAGUE RAT')],
+    [idxByName('PLAGUE RAT')],
+  ].map((a) => a.filter((i) => i >= 0)),
+  boss: idxByName('RAT KING'),
+};
 
 interface Projectile {
   sprite: THREE.Sprite;
