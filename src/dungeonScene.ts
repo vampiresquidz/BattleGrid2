@@ -4,7 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { textures, orbTexture, humanoidTexture } from './sprites.ts';
+import { orbTexture, humanoidTexture } from './sprites.ts';
 import type { AgentBody } from './sprites.ts';
 import { getCredits, addCredits, getSelectedCharacter, getSelectedBody, tintColor } from './characters.ts';
 import { playSfx } from './sfx.ts';
@@ -39,7 +39,6 @@ export interface DungeonOpts {
 }
 
 const TILE = 2.4;
-const WALL_H = 2.7;
 
 export class DungeonScene {
   private renderer: THREE.WebGLRenderer;
@@ -53,6 +52,7 @@ export class DungeonScene {
   private player!: THREE.Sprite;
   private playerBaseY = 1.35;
   private torch!: THREE.PointLight;
+  private motes!: THREE.Points;
   private cur = new THREE.Vector2();      // current world pos (x,z)
   private targetTile: { col: number; row: number };
   private pendingArrive = false;
@@ -110,70 +110,80 @@ export class DungeonScene {
   private wz(row: number) { return (row - (this.run.th - 1) / 2) * TILE; }
 
   private build() {
-    // fog far must clear the camera→floor distance (~20u) or the whole maze reads
-    // black; keep near maze crisp, only the deep maze fades into the dark.
-    this.scene.fog = new THREE.Fog(0x06060f, TILE * 6, TILE * 17);
-    this.scene.background = new THREE.Color(0x06060f);
-
-    this.scene.add(new THREE.AmbientLight(0x46527e, 1.35));
-    // torch on the player — pools warm light on nearby tiles (dungeon mood)
-    this.torch = new THREE.PointLight(0xcfe6ff, 60, TILE * 11, 1.4);
-    this.torch.position.set(0, 5, 0);
-    this.scene.add(this.torch);
-    const fill = new THREE.DirectionalLight(0xa79bff, 0.6);
-    fill.position.set(-4, 12, 6);
-    this.scene.add(fill);
-
-    // ---- floor + wall instanced meshes ----
     const run = this.run;
-    const floorIdx: number[] = [];
-    const wallIdx: number[] = [];
-    for (let r = 0; r < run.th; r++) {
-      for (let c = 0; c < run.tw; c++) {
-        if (run.tiles[r * run.tw + c] === 1) { floorIdx.push(r * run.tw + c); continue; }
-        // a wall tile is drawn only if it borders a floor tile (carves the look)
-        let border = false;
-        for (let dr = -1; dr <= 1 && !border; dr++)
-          for (let dc = -1; dc <= 1; dc++) {
-            const nc = c + dc, nr = r + dr;
-            if (nc >= 0 && nr >= 0 && nc < run.tw && nr < run.th && run.tiles[nr * run.tw + nc] === 1) { border = true; break; }
-          }
-        if (border) wallIdx.push(r * run.tw + c);
-      }
-    }
+    // Mega Man Battle Network "Net" look: glowing data-roads suspended in a black
+    // cyber-void. Panels light themselves (emissive + bloom) so the void stays dark.
+    this.scene.fog = new THREE.Fog(0x02030a, TILE * 8, TILE * 22);
+    this.scene.background = this.voidBackground();
 
-    const floorTex = textures.alienGround();
-    floorTex.colorSpace = THREE.SRGBColorSpace;
+    this.scene.add(new THREE.AmbientLight(0x4a5894, 1.1));
+    // a soft cool key + a gentle follow glow (panels do most of the lighting)
+    const key = new THREE.DirectionalLight(0xbfd4ff, 0.5);
+    key.position.set(-4, 12, 6);
+    this.scene.add(key);
+    this.torch = new THREE.PointLight(0x8fe0ff, 14, TILE * 8, 1.6);
+    this.torch.position.set(0, 4.5, 0);
+    this.scene.add(this.torch);
+
+    // deep wire-grid floor far below, glimpsed through the gaps between roads —
+    // the classic "suspended over the Net" depth cue.
+    const grid = new THREE.GridHelper(TILE * Math.max(run.tw, run.th) * 2.2, 48, 0x1a3a6a, 0x0e2046);
+    grid.position.y = -9;
+    (grid.material as THREE.Material).transparent = true;
+    (grid.material as THREE.Material).opacity = 0.5;
+    this.scene.add(grid);
+
+    // drifting data-motes for atmosphere
+    this.motes = this.makeMotes();
+    this.scene.add(this.motes);
+
+    // ---- which tiles are floor (data-road panels) ----
+    const floorIdx: number[] = [];
+    for (let r = 0; r < run.th; r++)
+      for (let c = 0; c < run.tw; c++)
+        if (run.tiles[r * run.tw + c] === 1) floorIdx.push(r * run.tw + c);
+
+    // ---- floor panels: dark tile, bright neon border (one per road tile) ----
+    const panelTex = this.netPanelTexture();
     const floorMat = new THREE.MeshStandardMaterial({
-      map: floorTex, emissiveMap: floorTex, emissive: 0x2c50c0, emissiveIntensity: 0.7,
-      color: 0x7884b8, roughness: 1, metalness: 0.05,
+      map: panelTex, emissiveMap: panelTex, emissive: 0xffffff, emissiveIntensity: 0.55,
+      color: 0x16294f, roughness: 0.9, metalness: 0.1,
     });
-    const floorGeo = new THREE.BoxGeometry(TILE, 0.3, TILE);
+    const floorGeo = new THREE.BoxGeometry(TILE, 0.28, TILE);
     const floor = new THREE.InstancedMesh(floorGeo, floorMat, floorIdx.length);
     const m = new THREE.Matrix4();
     floorIdx.forEach((k, i) => {
       const c = k % run.tw, r = (k / run.tw) | 0;
-      m.makeTranslation(this.wx(c), -0.15, this.wz(r));
+      m.makeTranslation(this.wx(c), -0.14, this.wz(r));
       floor.setMatrixAt(i, m);
     });
     floor.instanceMatrix.needsUpdate = true;
     this.scene.add(floor);
 
-    const cliffTex = textures.alienCliff();
-    cliffTex.colorSpace = THREE.SRGBColorSpace;
-    const wallMat = new THREE.MeshStandardMaterial({
-      map: cliffTex, emissiveMap: cliffTex, emissive: 0x7a4aff, emissiveIntensity: 0.6,
-      color: 0x3a3360, roughness: 1,
-    });
-    const wallGeo = new THREE.BoxGeometry(TILE, WALL_H, TILE);
-    const wall = new THREE.InstancedMesh(wallGeo, wallMat, wallIdx.length);
-    wallIdx.forEach((k, i) => {
+    // ---- edge rails: a low glowing curb wherever a road meets the void
+    // (replaces dungeon walls — defines the path silhouette, MMBN road-edge look)
+    const RAIL_H = 0.55, RAIL_T = 0.16, railY = RAIL_H / 2 - 0.02;
+    const rails: THREE.Matrix4[] = [];
+    const q = new THREE.Quaternion();
+    const yAxis = new THREE.Vector3(0, 1, 0);
+    const one = new THREE.Vector3(1, 1, 1);
+    const edges: Array<[number, number, boolean]> = [[0, -1, false], [0, 1, false], [-1, 0, true], [1, 0, true]];
+    for (const k of floorIdx) {
       const c = k % run.tw, r = (k / run.tw) | 0;
-      m.makeTranslation(this.wx(c), WALL_H / 2 - 0.1, this.wz(r));
-      wall.setMatrixAt(i, m);
+      for (const [dc, dr, vert] of edges) {
+        if (isFloor(run, c + dc, r + dr)) continue; // neighbour is road → no rail
+        q.setFromAxisAngle(yAxis, vert ? Math.PI / 2 : 0);
+        const pos = new THREE.Vector3(this.wx(c) + dc * TILE / 2, railY, this.wz(r) + dr * TILE / 2);
+        rails.push(new THREE.Matrix4().compose(pos, q, one));
+      }
+    }
+    const railMat = new THREE.MeshStandardMaterial({
+      color: 0x0a1830, emissive: 0x37c8ff, emissiveIntensity: 1.4, roughness: 0.6,
     });
-    wall.instanceMatrix.needsUpdate = true;
-    this.scene.add(wall);
+    const railMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(TILE, RAIL_H, RAIL_T), railMat, rails.length);
+    rails.forEach((mat, i) => railMesh.setMatrixAt(i, mat));
+    railMesh.instanceMatrix.needsUpdate = true;
+    this.scene.add(railMesh);
 
     // ---- node tokens (loot / enemy / boss) ----
     for (const [k, n] of run.nodes) {
@@ -200,9 +210,72 @@ export class DungeonScene {
       left: humanoidTexture(tint, 'left', 0.45, body as AgentBody),
       right: humanoidTexture(tint, 'right', 0.45, body as AgentBody),
     };
-    this.player = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.dirTex.down, transparent: true }));
+    const pmat = new THREE.SpriteMaterial({ map: this.dirTex.down, transparent: true });
+    pmat.color.setScalar(1.25); // sprites are unlit; lift it so it reads over the dark void
+    this.player = new THREE.Sprite(pmat);
     this.player.scale.set(3.0, 3.0, 1);
     this.scene.add(this.player);
+  }
+
+  // A square "Net" panel: dark fill, bright cyan border + faint inner detail.
+  // Used as both map and emissiveMap so only the bright pixels bloom.
+  private netPanelTexture(): THREE.Texture {
+    const s = 128;
+    const cv = document.createElement('canvas'); cv.width = cv.height = s;
+    const g = cv.getContext('2d')!;
+    const bg = g.createLinearGradient(0, 0, s, s);
+    bg.addColorStop(0, '#13244a'); bg.addColorStop(1, '#0c1730');
+    g.fillStyle = bg; g.fillRect(0, 0, s, s);
+    // faint inner crosshatch
+    g.strokeStyle = 'rgba(70,120,200,0.22)'; g.lineWidth = 1;
+    for (let i = 1; i < 4; i++) {
+      g.beginPath(); g.moveTo((i * s) / 4, 6); g.lineTo((i * s) / 4, s - 6); g.stroke();
+      g.beginPath(); g.moveTo(6, (i * s) / 4); g.lineTo(s - 6, (i * s) / 4); g.stroke();
+    }
+    // bright neon border (the road edge that reads at a glance)
+    const pad = 6, w = s - pad * 2;
+    g.strokeStyle = '#5fe0ff'; g.lineWidth = 6; g.lineJoin = 'round';
+    g.strokeRect(pad, pad, w, w);
+    g.strokeStyle = 'rgba(150,245,255,0.55)'; g.lineWidth = 2;
+    g.strokeRect(pad + 5, pad + 5, w - 10, w - 10);
+    // corner nodes
+    g.fillStyle = '#aef3ff';
+    for (const [x, y] of [[pad, pad], [s - pad, pad], [pad, s - pad], [s - pad, s - pad]]) {
+      g.beginPath(); g.arc(x, y, 3.4, 0, 6.3); g.fill();
+    }
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+
+  // radial dark-blue → black void backdrop
+  private voidBackground(): THREE.Texture {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+    const g = cv.getContext('2d')!;
+    const rg = g.createRadialGradient(128, 110, 30, 128, 128, 200);
+    rg.addColorStop(0, '#0a1430'); rg.addColorStop(0.6, '#050a1c'); rg.addColorStop(1, '#01020a');
+    g.fillStyle = rg; g.fillRect(0, 0, 256, 256);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+
+  private makeMotes(): THREE.Points {
+    const n = 260;
+    const g = new THREE.BufferGeometry();
+    const p = new Float32Array(n * 3);
+    const span = TILE * Math.max(this.run.tw, this.run.th);
+    for (let i = 0; i < n; i++) {
+      p[i * 3] = (Math.random() - 0.5) * span;
+      p[i * 3 + 1] = Math.random() * 12 - 1;
+      p[i * 3 + 2] = (Math.random() - 0.5) * span;
+    }
+    g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+    const mat = new THREE.PointsMaterial({
+      color: 0x6fe0ff, size: 0.14, transparent: true, opacity: 0.8,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    return new THREE.Points(g, mat);
   }
 
   private addPad(col: number, row: number, color: number) {
@@ -225,7 +298,7 @@ export class DungeonScene {
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.composer.addPass(new UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight), 0.8, 0.55, 0.6,
+      new THREE.Vector2(window.innerWidth, window.innerHeight), 0.6, 0.5, 0.8,
     ));
     this.composer.addPass(new ShaderPass(GradeShader));
     this.composer.addPass(new OutputPass());
@@ -399,6 +472,16 @@ export class DungeonScene {
 
     // token bob/spin
     for (const tk of this.tokens.values()) tk.sprite.position.y = tk.baseY + Math.sin(t * 2.2 + tk.phase) * 0.18;
+
+    // drift data-motes upward around the player, wrapping
+    const arr = this.motes.geometry.getAttribute('position') as THREE.BufferAttribute;
+    for (let i = 0; i < arr.count; i++) {
+      let y = arr.getY(i) + dt * 0.5;
+      if (y > 12) y = -1;
+      arr.setY(i, y);
+    }
+    arr.needsUpdate = true;
+    this.motes.position.set(this.cur.x, 0, this.cur.y);
 
     // toast fade
     if (this.toastT > 0) { this.toastT -= dt; if (this.toastT <= 0) this.toastEl.style.opacity = '0'; }
