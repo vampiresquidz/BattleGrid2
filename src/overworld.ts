@@ -5,6 +5,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 // Vignette + gentle desaturate/contrast grade for cohesion (HD-2D "premium" feel).
 const GradeShader = {
@@ -45,16 +46,17 @@ import { openOps } from './ops.ts';
 import { initTide, getTide, getClearance, decorateName } from './tide.ts';
 import { openSettings } from './settings.ts';
 
-const BOUNDS = { x: 28, z: 19 };  // expanded play area
+const BOUNDS = { x: 40, z: 27 };  // expanded play area (large data-continent)
 const SPEED = 6.4;
 const RUN_MULT = 1.75;   // Shift = run
+const PLAYER_R = 0.6;    // collision radius vs. shop buildings
 type Dir = 'down' | 'up' | 'left' | 'right';
 
 // Three concentric difficulty regions (by distance from the spawn core). The
 // farther out you roam, the nastier the processes — and the richer the loot.
 const REGIONS = [
-  { name: 'INNER FLATS', maxR: 14, enemies: [0, 1, 2] },
-  { name: 'OUTER GRID',  maxR: 26, enemies: [3, 4, 5] },
+  { name: 'INNER FLATS', maxR: 19, enemies: [0, 1, 2] },
+  { name: 'OUTER GRID',  maxR: 35, enemies: [3, 4, 5] },
   { name: 'DEEP SECTORS', maxR: 999, enemies: [6, 7, 8, 9] },
 ];
 function regionAt(x: number, z: number): number {
@@ -125,6 +127,10 @@ export class OverworldScene {
   private pos = new THREE.Vector2(0, 6);
   private props: Prop[] = [];
   private actors: Interactable[] = [];
+  // physical shop buildings: collision footprints + the placed structures (so a
+  // late-loading 3D model can replace the procedural body in-place).
+  private obstacles: Array<{ x: number; z: number; rx: number; rz: number }> = [];
+  private buildings: Array<{ group: THREE.Group; body: THREE.Object3D; accent: number }> = [];
   private shards: Shard[] = [];
   private shardTotal = 0;
   private cacheTotal = 0;
@@ -218,16 +224,16 @@ export class OverworldScene {
   private build() {
     // light haze only — the diorama slab should be VISIBLE floating in the void
     // (Octopath HD-2D), not fogged out. Pushed out for the larger continent.
-    this.scene.fog = new THREE.Fog(0x0b0a20, 60, 170);
+    this.scene.fog = new THREE.Fog(0x0b0a20, 90, 250);
     this.scene.background = textures.alienSky();
     this.scene.backgroundIntensity = 0.4; // dim the nebula so the slab reads as the subject
 
     // HD-2D diorama: the world sits on a raised terrain SLAB with thick, visible
     // cliff edges (like an Octopath floating tabletop), not an infinite plane.
     const top = textures.alienGround();
-    top.wrapS = top.wrapT = THREE.RepeatWrapping; top.repeat.set(9, 7);
+    top.wrapS = top.wrapT = THREE.RepeatWrapping; top.repeat.set(13, 9);
     const cliff = textures.alienCliff();
-    cliff.repeat.set(12, 1);
+    cliff.repeat.set(18, 1);
     const topMat = new THREE.MeshStandardMaterial({
       map: top, emissiveMap: top, emissive: 0x2f4ec0, emissiveIntensity: 0.45,
       color: 0x6b78ad, roughness: 1, metalness: 0.05,
@@ -239,7 +245,7 @@ export class OverworldScene {
     const darkMat = new THREE.MeshStandardMaterial({ color: 0x06050d, roughness: 1 });
     // BoxGeometry face order: [+x, -x, +y(top), -y(bottom), +z, -z]
     const slab = new THREE.Mesh(
-      new THREE.BoxGeometry(62, 6, 44),
+      new THREE.BoxGeometry(88, 6, 62),
       [cliffMat, cliffMat, topMat, darkMat, cliffMat, cliffMat],
     );
     slab.position.y = -3; // top surface sits at y = 0 where sprites stand
@@ -253,11 +259,13 @@ export class OverworldScene {
     sun.position.set(-6, 16, 8);
     this.scene.add(sun);
     const accents: Array<[number, number, number, number, number]> = [
-      [0x2fd6ff, 5, 6, 5, 48],     // cyan core
-      [0xc44ff0, -8, 6, -3, 44],   // magenta core
-      [0xffb070, 0, 5, 9, 40],     // warm key (Octopath lantern feel)
-      [0x2fd6ff, 19, 7, -10, 54],  // far cyan
-      [0xc44ff0, -20, 7, 9, 54],   // far magenta
+      [0x2fd6ff, 5, 6, 5, 52],     // cyan core
+      [0xc44ff0, -8, 6, -3, 48],   // magenta core
+      [0xffb070, 0, 5, 9, 44],     // warm key (Octopath lantern feel)
+      [0x2fd6ff, 28, 7, -14, 62],  // far cyan
+      [0xc44ff0, -30, 7, 13, 62],  // far magenta
+      [0x2fd6ff, -26, 7, -16, 60], // far cyan 2
+      [0xffb070, 26, 6, 16, 54],   // far warm
     ];
     for (const [c, x, y, z, r] of accents) {
       const l = new THREE.PointLight(c, 16, r);
@@ -267,24 +275,29 @@ export class OverworldScene {
 
     // scenery spread across the whole continent
     const crystalSpots: Array<[number, number]> = [
-      [8, -3], [-10, 4], [13, -5], [18, 10], [-19, -6], [22, 2],
-      [-23, 12], [10, 16], [-8, -13], [25, -8], [-26, 0], [16, -13],
+      [12, -6], [-14, 6], [19, -8], [26, 14], [-27, -8], [31, 4],
+      [-33, 16], [14, 22], [-12, -18], [35, -12], [-36, 2], [22, -18],
+      [-20, 20], [33, 18], [-30, -18], [8, -22],
     ];
     for (const [x, z] of crystalSpots) this.addProp(textures.crystal(), x, z, 3.2, false, 0);
     const spireSpots: Array<[number, number]> = [
-      [11, 3], [-3, 5], [-13, -3], [20, -2], [-20, 8], [15, 13], [-17, -12], [26, 11],
+      [16, 5], [-20, -5], [28, -3], [-28, 11], [21, 19], [-24, -17],
+      [36, 15], [-37, -3], [18, -16], [-16, 17],
     ];
     for (const [x, z] of spireSpots) this.addProp(textures.spire(), x, z, 4.4, false, 0);
     // data-storms (battle zones) — tiered by region; kept clear of NPCs/caches
     // so you're never ambushed mid-conversation or mid-loot.
     const stormSpots: Array<[number, number]> = [
-      [4, 2], [-8, -6], [1, -3],                       // inner
-      [14, -6], [-15, -8], [17, 9], [-13, 12],         // outer
-      [24, -14], [-25, 4], [19, 16], [-24, -16],       // deep
+      [6, 4], [-11, -8], [2, -4],                          // inner
+      [20, -9], [-21, -11], [24, 13], [-18, 17],           // outer
+      [34, -20], [-35, 6], [27, 22], [-34, -22], [16, 24], // deep
     ];
     for (const [x, z] of stormSpots) {
       this.addProp(textures.alienFlora(), x, z, 3.2, true, Math.max(0, regionAt(x, z)));
     }
+
+    // physical shop buildings (a marketplace plaza near spawn)
+    this.buildShops();
 
     // drifting data-motes for atmosphere (bright -> they bloom)
     this.motes = this.makeMotes();
@@ -330,29 +343,15 @@ export class OverworldScene {
   private buildActors() {
     // The Oracle — gives & tracks the "Lost Index" quest.
     const oracle = this.makeSprite(textures.mermaid(), 2.8);
-    this.addActor(oracle, -6, -2, 1.4, 2.8,
+    this.addActor(oracle, -9, 3, 1.4, 2.8,
       () => (getQuestStage() === 0 ? 'Talk to the Oracle ·  !'
         : getQuestStage() === 1 && this.questComplete() ? 'Claim · The Lost Index'
         : 'Talk to the Oracle'),
       () => this.talkOracle(), 0.06);
 
-    // The Vendor — opens the agent shop. Bright gold cortex so it reads as a
-    // distinct, friendly NPC (not the dark cyber-skull player base).
-    const vendor = this.makeSprite(humanoidTexture('#ffcf3a', 'front', 0.9, 'cortex'), 3.0);
-    this.addActor(vendor, 7, -2, 1.5, 2.8,
-      () => 'Browse the AGENT SHOP',
-      () => this.openRoster());
-
-    // The Chip Merchant — opens the CHIP SHOP (buy unlockable chips, daily deals).
-    // Magenta cortex so it reads as a distinct vendor next to the gold agent shop.
-    const merchant = this.makeSprite(humanoidTexture('#d96bff', 'front', 0.9, 'cortex'), 3.0);
-    this.addActor(merchant, 11, -2, 1.5, 2.8,
-      () => 'Browse the CHIP SHOP',
-      () => this.openShop());
-
     // The Archivist — flavor lore, hints about shards.
     const arch = this.makeSprite(humanoidTexture('#46e0a0', 'front', 0.9, 'cortex'), 3.0);
-    this.addActor(arch, -4, 11, 1.5, 2.8,
+    this.addActor(arch, -7, 17, 1.5, 2.8,
       () => 'Talk to the Archivist',
       () => this.startDialogue([
         'Archivist: "Fragments of a deleted index drift across the sectors."',
@@ -363,13 +362,13 @@ export class OverworldScene {
     // The Dungeon Portal — a swirling rift that drops you into a freshly
     // generated roguelike maze: loot, processes, and a boss at the core.
     const portal = this.makeSprite(orbTexture('#ffd6ff', '#b03aff'), 3.6);
-    this.addActor(portal, 0, -6, 2.1, 3.0,
+    this.addActor(portal, 0, -7, 2.1, 3.0,
       () => 'Enter the GRID DUNGEON ·  ▣',
       () => this.opts.onPortal?.(), 0.22);
 
     // Data caches — crack for Credits (once, persisted). Reward scales with depth.
     const cacheSpots: Array<[number, number]> = [
-      [12, 8], [-16, 6], [20, -10], [-24, -12], [24, 14],
+      [18, 12], [-24, 9], [30, -14], [-34, -16], [33, 20], [-20, 22], [26, -22],
     ];
     this.cacheTotal = cacheSpots.length;
     const looted = getCaches();
@@ -394,10 +393,130 @@ export class OverworldScene {
     });
   }
 
+  // ---------------- physical shop buildings ----------------
+  private buildShops() {
+    // a marketplace plaza just south of spawn — each is a building you walk up
+    // to and press E to enter its store.
+    const shops: Array<{ name: string; sub: string; accent: number; x: number; z: number; open: () => void }> = [
+      { name: 'AGENT SHOP', sub: 'chassis & shells',     accent: 0xffcf3a, x: -15, z: -3,  open: () => this.openRoster() },
+      { name: 'CHIP SHOP',  sub: 'battlechips',          accent: 0xff5db4, x: 15,  z: -3,  open: () => this.openShop() },
+      { name: 'EXCHANGE',   sub: '◊ FLUX · daily ops',   accent: 0x67e0ff, x: 0,   z: -17, open: () => this.openOps() },
+    ];
+    for (const s of shops) this.makeBuilding(s.name, s.sub, s.accent, s.x, s.z, s.open);
+    // plaza fill so the storefronts read against the dark ground
+    const plaza = new THREE.PointLight(0xdfe8ff, 22, 60);
+    plaza.position.set(0, 12, -8);
+    this.scene.add(plaza);
+    void this.loadShopModel(); // swap in the AI 3D model if it loads (else keep boxes)
+  }
+
+  private makeBuilding(name: string, sub: string, accent: number, x: number, z: number, open: () => void) {
+    const W = 6, H = 5, D = 5;
+    const group = new THREE.Group();
+    group.position.set(x, 0, z);
+
+    // procedural body — the robust default (a late-loading GLB replaces this)
+    const body = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x141a30, emissive: new THREE.Color(accent).multiplyScalar(0.14),
+      roughness: 0.85, metalness: 0.25,
+    });
+    const box = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), mat);
+    box.position.y = H / 2; body.add(box);
+    const frame = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(W, H, D)),
+      new THREE.LineBasicMaterial({ color: accent }),
+    );
+    frame.position.y = H / 2; body.add(frame);
+    const door = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.2, 3.2),
+      new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
+    );
+    door.position.set(0, 1.7, D / 2 + 0.04); body.add(door);
+    group.add(body);
+
+    // floating sign above the storefront
+    const sign = this.makeSign(name, sub, accent);
+    sign.position.set(0, H + 1.4, D / 2 - 0.2);
+    group.add(sign);
+    this.scene.add(group);
+
+    this.buildings.push({ group, body, accent });
+    this.obstacles.push({ x, z, rx: W / 2, rz: D / 2 });
+
+    // interact marker at the door (a glowing orb you walk up to; E enters)
+    const hex = '#' + accent.toString(16).padStart(6, '0');
+    const marker = this.makeSprite(orbTexture('#ffffff', hex), 1.3);
+    this.addActor(marker, x, z + D / 2 + 1.3, 1.3, 3.4,
+      () => `Enter · ${name}`, open, 0.16);
+  }
+
+  private makeSign(name: string, sub: string, accent: number): THREE.Sprite {
+    const c = document.createElement('canvas'); c.width = 512; c.height = 160;
+    const g = c.getContext('2d')!;
+    const hex = '#' + accent.toString(16).padStart(6, '0');
+    g.fillStyle = 'rgba(8,12,24,0.86)';
+    g.beginPath(); g.roundRect(8, 8, 496, 144, 16); g.fill();
+    g.lineWidth = 4; g.strokeStyle = hex; g.shadowColor = hex; g.shadowBlur = 18;
+    g.beginPath(); g.roundRect(8, 8, 496, 144, 16); g.stroke();
+    g.shadowBlur = 14; g.fillStyle = hex;
+    g.font = 'bold 60px ui-monospace, monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(name, 256, 64);
+    g.shadowBlur = 0; g.fillStyle = '#cfe0ff';
+    g.font = '500 30px ui-monospace, monospace';
+    g.fillText(sub, 256, 116);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false }));
+    sp.scale.set(6.4, 2.0, 1);
+    return sp;
+  }
+
+  // Swap the AI-generated 3D model into every shop (one model, reused). If the
+  // GLB is missing or fails, the procedural boxes stay — the game never breaks.
+  private async loadShopModel() {
+    try {
+      const gltf = await new GLTFLoader().loadAsync('/models/shop.glb');
+      const model = gltf.scene;
+      // normalize: scale to a target height, center on x/z, sit on the ground
+      const bb = new THREE.Box3().setFromObject(model);
+      const size = new THREE.Vector3(); bb.getSize(size);
+      const center = new THREE.Vector3(); bb.getCenter(center);
+      const scale = 7.0 / (Math.max(size.x, size.y, size.z) || 1);
+      model.scale.setScalar(scale);
+      model.position.set(-center.x * scale, -bb.min.y * scale, -center.z * scale);
+      model.rotation.y = Math.PI; // face the storefront toward the plaza (+z)
+      model.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        mesh.castShadow = false; mesh.receiveShadow = false;
+        // self-illuminate the baked texture so the dark building's neon trim
+        // glows (and bloom catches it) instead of reading as a black blob.
+        const mm = mesh.material as THREE.MeshStandardMaterial;
+        if (mm) {
+          mm.emissive = new THREE.Color(0xffffff);
+          mm.emissiveMap = mm.map ?? null;
+          mm.emissiveIntensity = 0.9;
+          mm.needsUpdate = true;
+        }
+      });
+      for (const b of this.buildings) {
+        b.group.remove(b.body);
+        b.group.add(model.clone(true));
+      }
+    } catch { /* keep the procedural buildings */ }
+  }
+
+  private blocked(x: number, z: number): boolean {
+    for (const o of this.obstacles)
+      if (Math.abs(x - o.x) < o.rx + PLAYER_R && Math.abs(z - o.z) < o.rz + PLAYER_R) return true;
+    return false;
+  }
+
   private buildShards() {
     const spots: Array<[number, number]> = [
-      [3, -8], [-10, -9], [15, 2], [-18, -2], [9, 15],
-      [-7, 16], [22, 6], [-22, 9], [26, -4], [-26, -14],
+      [5, -11], [-14, -12], [22, 4], [-26, -3], [13, 20],
+      [-10, 22], [31, 9], [-31, 13], [36, -6], [-36, -19],
+      [20, -20], [-22, 19],
     ];
     this.shardTotal = spots.length;
     const got = getShards();
@@ -415,9 +534,10 @@ export class OverworldScene {
   // ---------------- fast-travel beacons ----------------
   private buildBeacons() {
     const spots: Array<[number, number, string]> = [
-      [-2, -9, 'INNER FLATS'],
-      [18, 2, 'OUTER GRID'],
-      [20, -17, 'DEEP SECTORS'],
+      [9, 9, 'INNER FLATS'],
+      [27, 3, 'OUTER GRID'],
+      [30, -22, 'DEEP SECTORS'],
+      [-30, -8, 'WEST EXPANSE'],
     ];
     const known = getBeacons();
     spots.forEach(([x, z, name], i) => {
@@ -1160,8 +1280,11 @@ export class OverworldScene {
       if (moving) {
         const spd = SPEED * (running ? RUN_MULT : 1);
         const len = Math.hypot(dx, dz);
-        this.pos.x = THREE.MathUtils.clamp(this.pos.x + (dx / len) * spd * dt, -BOUNDS.x, BOUNDS.x);
-        this.pos.y = THREE.MathUtils.clamp(this.pos.y + (dz / len) * spd * dt, -BOUNDS.z, BOUNDS.z);
+        // move per-axis so you slide along shop walls instead of sticking
+        const nx = THREE.MathUtils.clamp(this.pos.x + (dx / len) * spd * dt, -BOUNDS.x, BOUNDS.x);
+        const nz = THREE.MathUtils.clamp(this.pos.y + (dz / len) * spd * dt, -BOUNDS.z, BOUNDS.z);
+        if (!this.blocked(nx, this.pos.y)) this.pos.x = nx;
+        if (!this.blocked(this.pos.x, nz)) this.pos.y = nz;
         dir = Math.abs(dx) >= Math.abs(dz) ? (dx < 0 ? 'left' : 'right') : (dz < 0 ? 'up' : 'down');
         if (dir !== this.facing) this.faceDir(dir); // turn to face where we walk
         this.checkRegion();
