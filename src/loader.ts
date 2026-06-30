@@ -55,6 +55,17 @@ export const ALL_SPRITES: string[] = [
   '/sprites/cortex_base.png',
   '/sprites/cortex_battle.png',
   '/sprites/cortex_right.png',
+  '/sprites/goblin_base.png',
+  '/sprites/goblin_back.png',
+  '/sprites/goblin_right.png',
+  '/sprites/goblin_battle.png',
+  '/sprites/walk/goblin_front.png',
+  '/sprites/walk/goblin_back.png',
+  '/sprites/walk/goblin_left.png',
+  '/sprites/walk/goblin_right.png',
+  '/sprites/battle/goblin_idle.png',
+  '/sprites/battle/goblin_atk.png',
+  '/sprites/battle/goblin_melee.png',
   '/sprites/enemy_angler.png',
   '/sprites/enemy_angler_attack.png',
   '/sprites/enemy_angler_attack_chroma.png',
@@ -135,7 +146,7 @@ export const ALL_SPRITES: string[] = [
 
 // Scoped sets so each transition only waits on what it needs.
 export const OVERWORLD_ASSETS = ALL_SPRITES.filter(
-  (u) => /world_|\/walk\/|ally_|player_|cortex_|monkey_|robot_|agent_/.test(u) && !/_battle/.test(u),
+  (u) => /world_|\/walk\/|ally_|player_|cortex_|monkey_|robot_|agent_|goblin_/.test(u) && !/_battle/.test(u),
 );
 export const BATTLE_ASSETS = ALL_SPRITES.filter(
   (u) => /_battle|\/battle\/|anim_|enemy_|meme_/.test(u),
@@ -144,7 +155,7 @@ export const BATTLE_ASSETS = ALL_SPRITES.filter(
 // Enemy roster order (must match ENEMY_ROSTER in battle.ts) → sprite filename key.
 const ENEMY_KEYS = ['tralalero', 'tungtung', 'angler', 'ballerina', 'bombardiro', 'crab', 'hallucination', 'daemon', 'trainer', 'crawler', 'packetrat', 'plaguerat', 'ratking'];
 // body archetype → its static battle base PNG stem
-const BODY_BATTLE_BASE: Record<string, string> = { humanoid: 'agent_battle', monkey: 'monkey_battle', evilbot: 'robot_battle', cortex: 'cortex_battle' };
+const BODY_BATTLE_BASE: Record<string, string> = { humanoid: 'agent_battle', monkey: 'monkey_battle', evilbot: 'robot_battle', cortex: 'cortex_battle', goblin: 'goblin_battle' };
 
 // Only the battle art a SPECIFIC fight needs: the combatant bodies' battle sheets
 // + (for PvE) the one enemy being fought. Preloading the whole 100 MB battle set

@@ -342,7 +342,7 @@ export function robotAttackTexture(pal: RobotPalette): THREE.Texture { return pi
 export type AgentView = 'front' | 'right' | 'back' | 'left' | 'battle';
 // Body archetype / "chassis" — a whole different sprite set you can pick in the
 // agent screen. Each one is recolored per character by the same tint pipeline.
-export type AgentBody = 'humanoid' | 'monkey' | 'evilbot' | 'cortex';
+export type AgentBody = 'humanoid' | 'monkey' | 'evilbot' | 'cortex' | 'goblin';
 
 type ViewMap = Record<AgentView, { src: string; mirror: boolean }>;
 
@@ -374,6 +374,14 @@ const AGENT_BODIES: Record<AgentBody, ViewMap> = {
     back:   { src: '/sprites/cortex_back.png',   mirror: false },
     left:   { src: '/sprites/cortex_right.png',  mirror: true },
     battle: { src: '/sprites/cortex_battle.png', mirror: false },
+  },
+  // pixel-art goblin (genimg → pixelsnap workflow)
+  goblin: {
+    front:  { src: '/sprites/goblin_base.png',   mirror: false },
+    right:  { src: '/sprites/goblin_right.png',  mirror: false },
+    back:   { src: '/sprites/goblin_back.png',   mirror: false },
+    left:   { src: '/sprites/goblin_right.png',  mirror: true },
+    battle: { src: '/sprites/goblin_battle.png', mirror: false },
   },
 };
 
@@ -457,6 +465,7 @@ const WALK_SRC: Record<AgentBody, Record<WalkDir, string>> = {
   monkey:   { down: '/sprites/walk/monkey_front.png',   up: '/sprites/walk/monkey_back.png',   left: '/sprites/walk/monkey_left.png',   right: '/sprites/walk/monkey_right.png' },
   evilbot:  { down: '/sprites/walk/evilbot_front.png',  up: '/sprites/walk/evilbot_back.png',  left: '/sprites/walk/evilbot_left.png',  right: '/sprites/walk/evilbot_right.png' },
   cortex:   { down: '/sprites/walk/cortex_front.png',   up: '/sprites/walk/cortex_back.png',   left: '/sprites/walk/cortex_left.png',   right: '/sprites/walk/cortex_right.png' },
+  goblin:   { down: '/sprites/walk/goblin_front.png',   up: '/sprites/walk/goblin_back.png',   left: '/sprites/walk/goblin_left.png',   right: '/sprites/walk/goblin_right.png' },
 };
 
 // Paint an N-frame horizontal strip through the same pixelate→tint→re-clip
@@ -512,14 +521,17 @@ export const BATTLE_MELEE_FRAMES = 5;
 const BATTLE_IDLE_SRC: Record<AgentBody, string> = {
   humanoid: '/sprites/battle/humanoid_idle.png', monkey: '/sprites/battle/monkey_idle.png',
   evilbot: '/sprites/battle/evilbot_idle.png', cortex: '/sprites/battle/cortex_idle.png',
+  goblin: '/sprites/battle/goblin_idle.png',
 };
 const BATTLE_ATK_SRC: Record<AgentBody, string> = {
   humanoid: '/sprites/battle/humanoid_atk.png', monkey: '/sprites/battle/monkey_atk.png',
   evilbot: '/sprites/battle/evilbot_atk.png', cortex: '/sprites/battle/cortex_atk.png',
+  goblin: '/sprites/battle/goblin_atk.png',
 };
 const BATTLE_MELEE_SRC: Record<AgentBody, string> = {
   humanoid: '/sprites/battle/humanoid_melee.png', monkey: '/sprites/battle/monkey_melee.png',
   evilbot: '/sprites/battle/evilbot_melee.png', cortex: '/sprites/battle/cortex_melee.png',
+  goblin: '/sprites/battle/goblin_melee.png',
 };
 
 export function battleIdleTexture(color: string, strength = 0.45, body: AgentBody = 'humanoid'): THREE.Texture {

@@ -26,6 +26,7 @@ export const BODIES: BodyDef[] = [
   { id: 'monkey',   name: 'PRIMATE',  desc: 'Agile simian build. Goggles, tail, and bad intentions.' },
   { id: 'evilbot',  name: 'WARFRAME', desc: 'Hostile killer-bot chassis. Spikes, red optics, no mercy.' },
   { id: 'cortex',   name: 'CORTEX',   desc: 'Glass-domed think-tank build. Exposed neural core, star in hand.' },
+  { id: 'goblin',   name: 'GOBLIN',   desc: 'A scrappy cyber-goblin gremlin. Green, grinning, and up to no good.' },
 ];
 
 export const DEFAULT_BODY: AgentBody = 'humanoid';

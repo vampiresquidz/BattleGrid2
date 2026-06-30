@@ -36,6 +36,7 @@ BODIES = {
     'monkey':   {'front': 'monkey_base.png', 'back': 'monkey_back.png',      'right': 'monkey_right.png'},
     'evilbot':  {'front': 'robot_base.png',  'back': 'robot_back.png',       'right': 'robot_right.png'},
     'cortex':   {'front': 'cortex_base.png', 'back': 'cortex_back.png',      'right': 'cortex_right.png'},
+    'goblin':   {'front': 'goblin_base.png', 'back': 'goblin_back.png',      'right': 'goblin_right.png'},
 }
 
 

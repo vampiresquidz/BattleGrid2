@@ -80,7 +80,7 @@ const ENEMY_ROSTER: EnemyDef[] = [
     idleSheet: textures.crawlerIdleSheet, idleFrames: 8, idleFps: 9, attackSheet: textures.crawlerAtkSheet, attackFrames: 6 },
   // --- the rat mob (genimg → pixelsnap pixel-art villains) ---
   { name: 'PACKET RAT', tex: textures.packetrat, atk: textures.packetratAtk, hp: 240, scale: 2.5, pattern: 'dash' },
-  { name: 'PLAGUE RAT', tex: textures.plaguerat, atk: textures.plagueratAtk, hp: 330, scale: 2.7, pattern: 'shot', status: 'hex', resist: 0.2 },
+  { name: 'PLAGUE RAT', tex: textures.plaguerat, atk: textures.plagueratAtk, hp: 330, scale: 2.7, yoff: -0.5, pattern: 'shot', status: 'hex', resist: 0.2 },
   { name: 'RAT KING', tex: textures.ratking, atk: textures.ratkingAtk, hp: 520, scale: 3.1, pattern: 'pincer', status: 'snare', resist: 0.4 },
 ];
 

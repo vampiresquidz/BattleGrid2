@@ -32,6 +32,7 @@ BODIES = {
     'monkey':   'monkey_battle.png',
     'evilbot':  'robot_battle.png',
     'cortex':   'cortex_battle.png',
+    'goblin':   'goblin_battle.png',
 }
 
 
