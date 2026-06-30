@@ -146,7 +146,9 @@ export const ALL_SPRITES: string[] = [
 
 // Scoped sets so each transition only waits on what it needs.
 export const OVERWORLD_ASSETS = ALL_SPRITES.filter(
-  (u) => /world_|\/walk\/|ally_|player_|cortex_|monkey_|robot_|agent_|goblin_/.test(u) && !/_battle/.test(u),
+  // idle/walk bodies + world art, but NOT battle sheets (the `cortex_`/`monkey_`
+  // /`goblin_` tokens otherwise match `/battle/cortex_atk.png` etc.)
+  (u) => /world_|\/walk\/|ally_|player_|cortex_|monkey_|robot_|agent_|goblin_/.test(u) && !/_battle|\/battle\//.test(u),
 );
 export const BATTLE_ASSETS = ALL_SPRITES.filter(
   (u) => /_battle|\/battle\/|anim_|enemy_|meme_/.test(u),
