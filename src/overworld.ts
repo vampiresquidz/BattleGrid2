@@ -650,6 +650,46 @@ export class OverworldScene {
       const u = new THREE.PointLight(0xffd27f, 4, 7); u.position.set(lx * w * 0.32, 0.9, lz * w * 0.32); g.add(u);
     }
     this.rooftopAnims.push((t) => { waterMat.emissiveIntensity = 0.5 + 0.3 * Math.sin(t * 2.2); });
+    void this.loadRoofPoolModel(cx, cz, topY, w, g); // swap in the AI 3D pool if it loads
+  }
+
+  // Replace the procedural rooftop pool with the Trellis-generated pool GLB
+  // (genimg → pixelsnap/flatten → PiAPI Trellis image-to-3d → public/models/pool.glb).
+  private async loadRoofPoolModel(cx: number, cz: number, topY: number, w: number, fallback: THREE.Group) {
+    try {
+      const gltf = await new GLTFLoader().loadAsync('/models/pool.glb');
+      const model = gltf.scene;
+      const bb = new THREE.Box3().setFromObject(model);
+      const size = new THREE.Vector3(); bb.getSize(size);
+      const center = new THREE.Vector3(); bb.getCenter(center);
+      const scale = (w * 1.15) / (Math.max(size.x, size.z) || 1); // fit the roof footprint
+      model.scale.setScalar(scale);
+      model.position.set(cx - center.x * scale, topY - bb.min.y * scale, cz - center.z * scale);
+      const glowAnims: THREE.MeshStandardMaterial[] = [];
+      model.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        mesh.castShadow = false; mesh.receiveShadow = false;
+        const mm = mesh.material as THREE.MeshStandardMaterial;
+        if (!mm) return;
+        // self-illuminate baked texture so the deck/rails read against the night;
+        // the bright cyan water glows extra and bloom catches it.
+        mm.emissive = new THREE.Color(0xffffff);
+        mm.emissiveMap = mm.map ?? null;
+        mm.emissiveIntensity = 0.35;
+        mm.needsUpdate = true;
+        glowAnims.push(mm);
+      });
+      this.scene.remove(fallback);
+      this.scene.add(model);
+      // a soft cyan fill + a gentle shimmer pulse on the whole model
+      const fill = new THREE.PointLight(0x16c0ff, 7, w * 4); fill.position.set(cx, topY + 2, cz); this.scene.add(fill);
+      this.rooftopAnims.push((t) => {
+        const k = 0.32 + 0.12 * Math.sin(t * 2.2);
+        for (const m of glowAnims) m.emissiveIntensity = k;
+        fill.intensity = 6 + Math.sin(t * 2.2) * 2;
+      });
+    } catch { /* keep the procedural pool */ }
   }
 
   // A helipad: marked landing disc with a blinking light ring.
