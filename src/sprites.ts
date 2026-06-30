@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import {
+  getModularConfig, modularIdleCanvas, modularWalkCanvas, modularBattleCanvas,
+} from './modular.ts';
 
 // Real character art generated with gpt-image-1 (see tools/genimg.py), served
 // from /public/sprites. Loaded as textures with crisp magnification so the
@@ -350,7 +353,9 @@ export function robotAttackTexture(pal: RobotPalette): THREE.Texture { return pi
 export type AgentView = 'front' | 'right' | 'back' | 'left' | 'battle';
 // Body archetype / "chassis" — a whole different sprite set you can pick in the
 // agent screen. Each one is recolored per character by the same tint pipeline.
-export type AgentBody = 'humanoid' | 'monkey' | 'evilbot' | 'cortex' | 'goblin';
+// 'custom' = the procedural modular build (see modular.ts); it ignores the tint
+// `color` arg and renders from the stored ModularConfig instead.
+export type AgentBody = 'humanoid' | 'monkey' | 'evilbot' | 'cortex' | 'goblin' | 'custom';
 
 type ViewMap = Record<AgentView, { src: string; mirror: boolean }>;
 
@@ -390,6 +395,14 @@ const AGENT_BODIES: Record<AgentBody, ViewMap> = {
     back:   { src: '/sprites/goblin_back.png',   mirror: false },
     left:   { src: '/sprites/goblin_right.png',  mirror: true },
     battle: { src: '/sprites/goblin_battle.png', mirror: false },
+  },
+  // procedural modular build — these paths are never loaded (routed to modular.ts)
+  custom: {
+    front:  { src: '/sprites/agent_base.png',       mirror: false },
+    right:  { src: '/sprites/agent_base_right.png',  mirror: false },
+    back:   { src: '/sprites/agent_base_back.png',   mirror: false },
+    left:   { src: '/sprites/agent_base_right.png',  mirror: true },
+    battle: { src: '/sprites/agent_battle.png',      mirror: false },
   },
 };
 
@@ -449,12 +462,14 @@ function paintHumanoid(c: HTMLCanvasElement, body: AgentBody, view: AgentView, c
 // signature, so we only wash the armour with the character's hue and let the neon
 // accents bleed through rather than recolouring them away.
 export function humanoidCanvas(color: string, view: AgentView = 'front', strength = 0.45, body: AgentBody = 'humanoid'): HTMLCanvasElement {
+  if (body === 'custom') return modularIdleCanvas(view, getModularConfig());
   const c = document.createElement('canvas'); c.width = c.height = 512;
   paintHumanoid(c, body, view, color, strength);
   return c;
 }
 
 export function humanoidTexture(color: string, view: AgentView = 'front', strength = 0.45, body: AgentBody = 'humanoid'): THREE.Texture {
+  if (body === 'custom') return pixelTex(modularIdleCanvas(view, getModularConfig()));
   const c = humanoidCanvas(color, view, strength, body);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace; t.magFilter = THREE.NearestFilter; t.anisotropy = 4;
@@ -474,6 +489,7 @@ const WALK_SRC: Record<AgentBody, Record<WalkDir, string>> = {
   evilbot:  { down: '/sprites/walk/evilbot_front.png',  up: '/sprites/walk/evilbot_back.png',  left: '/sprites/walk/evilbot_left.png',  right: '/sprites/walk/evilbot_right.png' },
   cortex:   { down: '/sprites/walk/cortex_front.png',   up: '/sprites/walk/cortex_back.png',   left: '/sprites/walk/cortex_left.png',   right: '/sprites/walk/cortex_right.png' },
   goblin:   { down: '/sprites/walk/goblin_front.png',   up: '/sprites/walk/goblin_back.png',   left: '/sprites/walk/goblin_left.png',   right: '/sprites/walk/goblin_right.png' },
+  custom:   { down: '', up: '', left: '', right: '' }, // routed to modular.ts
 };
 
 // Paint an N-frame horizontal strip through the same pixelate→tint→re-clip
@@ -516,6 +532,7 @@ function stripTexture(src: string, frames: number, color: string, strength: numb
 }
 
 export function humanoidWalkTexture(color: string, dir: WalkDir, strength = 0.45, body: AgentBody = 'humanoid'): THREE.Texture {
+  if (body === 'custom') return pixelTex(modularWalkCanvas(dir, getModularConfig(), WALK_FRAMES));
   return stripTexture(WALK_SRC[body][dir], WALK_FRAMES, color, strength);
 }
 
@@ -529,28 +546,31 @@ export const BATTLE_MELEE_FRAMES = 5;
 const BATTLE_IDLE_SRC: Record<AgentBody, string> = {
   humanoid: '/sprites/battle/humanoid_idle.png', monkey: '/sprites/battle/monkey_idle.png',
   evilbot: '/sprites/battle/evilbot_idle.png', cortex: '/sprites/battle/cortex_idle.png',
-  goblin: '/sprites/battle/goblin_idle.png',
+  goblin: '/sprites/battle/goblin_idle.png', custom: '',
 };
 const BATTLE_ATK_SRC: Record<AgentBody, string> = {
   humanoid: '/sprites/battle/humanoid_atk.png', monkey: '/sprites/battle/monkey_atk.png',
   evilbot: '/sprites/battle/evilbot_atk.png', cortex: '/sprites/battle/cortex_atk.png',
-  goblin: '/sprites/battle/goblin_atk.png',
+  goblin: '/sprites/battle/goblin_atk.png', custom: '',
 };
 const BATTLE_MELEE_SRC: Record<AgentBody, string> = {
   humanoid: '/sprites/battle/humanoid_melee.png', monkey: '/sprites/battle/monkey_melee.png',
   evilbot: '/sprites/battle/evilbot_melee.png', cortex: '/sprites/battle/cortex_melee.png',
-  goblin: '/sprites/battle/goblin_melee.png',
+  goblin: '/sprites/battle/goblin_melee.png', custom: '',
 };
 
 export function battleIdleTexture(color: string, strength = 0.45, body: AgentBody = 'humanoid'): THREE.Texture {
+  if (body === 'custom') return pixelTex(modularBattleCanvas('idle', getModularConfig(), BATTLE_IDLE_FRAMES));
   return stripTexture(BATTLE_IDLE_SRC[body], BATTLE_IDLE_FRAMES, color, strength);
 }
 
 export function battleAttackTexture(color: string, strength = 0.45, body: AgentBody = 'humanoid'): THREE.Texture {
+  if (body === 'custom') return pixelTex(modularBattleCanvas('atk', getModularConfig(), BATTLE_ATK_FRAMES));
   return stripTexture(BATTLE_ATK_SRC[body], BATTLE_ATK_FRAMES, color, strength);
 }
 
 // melee = a forward crescent slash sweep (distinct from the buster muzzle burst)
 export function battleMeleeTexture(color: string, strength = 0.45, body: AgentBody = 'humanoid'): THREE.Texture {
+  if (body === 'custom') return pixelTex(modularBattleCanvas('melee', getModularConfig(), BATTLE_MELEE_FRAMES));
   return stripTexture(BATTLE_MELEE_SRC[body], BATTLE_MELEE_FRAMES, color, strength);
 }

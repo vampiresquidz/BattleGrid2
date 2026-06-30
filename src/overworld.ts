@@ -67,6 +67,7 @@ import { openChipShop } from './shop.ts';
 import { openOps } from './ops.ts';
 import { initTide, getTide, getClearance, decorateName } from './tide.ts';
 import { openSettings } from './settings.ts';
+import { openCustomizer } from './customizer.ts';
 
 const BOUNDS = { x: 40, z: 27 };  // expanded play area (large data-continent)
 const SPEED = 6.4;
@@ -1688,6 +1689,20 @@ export class OverworldScene {
         chip.appendChild(lab);
         chip.onclick = () => { this.pickBody(b.id); render(); };
         bodyRow.appendChild(chip);
+      }
+
+      // CUSTOM chassis → offer the parts/colours customiser
+      if (curBody === 'custom') {
+        const cz = document.createElement('button');
+        cz.className = 'btn';
+        cz.textContent = '🎨 CUSTOMISE — parts & colours';
+        cz.style.cssText = 'width:100%;margin:6px 0 2px';
+        cz.onclick = () => openCustomizer(this.container, () => {
+          this.setCharacterTextures(tintColor(getSelectedCharacter()));
+          this.faceDir(this.facing);
+          render();
+        });
+        (bodyRow.parentElement ?? bodyRow).insertBefore(cz, bodyRow.nextSibling);
       }
 
       const grid = el.querySelector('.roster-grid') as HTMLElement;
