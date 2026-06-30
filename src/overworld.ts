@@ -142,6 +142,7 @@ export class OverworldScene {
   private rainPass!: ShaderPass;
   private flashT = 0;
   private searchlights: THREE.Mesh[] = [];
+  private nexus?: THREE.Object3D;
   private scene = new THREE.Scene();
   private camera: THREE.PerspectiveCamera;
   private clock = new THREE.Clock();
@@ -336,6 +337,9 @@ export class OverworldScene {
       this.scene.add(m); this.searchlights.push(m);
     }
 
+    // the megacity itself: a neon skyline ring + landmark towers + The Nexus
+    this.buildCity();
+
     // physical shop buildings (a marketplace plaza near spawn)
     this.buildShops();
 
@@ -433,6 +437,86 @@ export class OverworldScene {
           this.updateQuest();
         }, 0.12);
     });
+  }
+
+  // ---------------- the megacity (skyline + towers + Nexus) ----------------
+  // A dark facade with a grid of lit neon windows — emissive so the windows
+  // bloom. Cached + reused across every tower.
+  private neonWindowsTexture(): THREE.Texture {
+    const w = 128, h = 256;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const g = cv.getContext('2d')!;
+    g.fillStyle = '#0a0c14'; g.fillRect(0, 0, w, h);
+    const tints = ['#16e0ff', '#ff2d95', '#ffb020', '#9b5cff', '#cfe6ff'];
+    const cw = 12, ch = 16, pad = 5;
+    for (let y = 8; y < h - 8; y += ch) {
+      for (let x = 8; x < w - 8; x += cw) {
+        if (Math.random() < 0.42) {
+          g.fillStyle = tints[(Math.random() * tints.length) | 0];
+          g.globalAlpha = 0.5 + Math.random() * 0.5;
+          g.fillRect(x, y, cw - pad, ch - pad);
+        }
+      }
+    }
+    g.globalAlpha = 1;
+    const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
+    t.magFilter = THREE.NearestFilter; t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    return t;
+  }
+
+  private makeTower(w: number, ht: number, d: number, tex: THREE.Texture): THREE.Mesh {
+    const m = tex.clone(); m.needsUpdate = true; m.repeat.set(Math.max(1, Math.round(w / 4)), Math.max(2, Math.round(ht / 6)));
+    const side = new THREE.MeshStandardMaterial({ map: m, emissiveMap: m, emissive: 0xffffff, emissiveIntensity: 0.6, color: 0x12151f, roughness: 0.7, metalness: 0.4 });
+    const cap = new THREE.MeshStandardMaterial({ color: 0x0a0c12, roughness: 1 });
+    // box faces: [+x,-x,+y,-y,+z,-z]
+    return new THREE.Mesh(new THREE.BoxGeometry(w, ht, d), [side, side, cap, cap, side, side]);
+  }
+
+  private buildCity() {
+    const tex = this.neonWindowsTexture();
+
+    // far skyline ring — a dense megacity silhouette around the play area; out of
+    // reach (no collision), bases sunk so they rise from the smog, fog-faded.
+    for (let i = 0; i < 46; i++) {
+      const a = (i / 46) * Math.PI * 2 + Math.random() * 0.18;
+      const r = 50 + Math.random() * 26;
+      const x = Math.cos(a) * r, z = Math.sin(a) * r * 0.78;
+      const ht = 14 + Math.random() * 30;
+      const w = 5 + Math.random() * 7, d = 5 + Math.random() * 7;
+      const t = this.makeTower(w, ht, d, tex);
+      t.position.set(x, ht / 2 - 5, z);
+      t.rotation.y = Math.random() * 0.6 - 0.3;
+      this.scene.add(t);
+    }
+
+    // in-map landmark towers (corpo blocks) — solid, so you weave between them.
+    const blocks: Array<[number, number, number, number]> = [ // x, z, w, height (clear of pickups/NPCs)
+      [12, -22, 6, 16], [-18, 8, 6, 18], [18, -10, 6, 14], [10, 24, 6, 15], [-30, 18, 7, 20],
+    ];
+    for (const [x, z, w, ht] of blocks) {
+      const t = this.makeTower(w, ht, w, tex);
+      t.position.set(x, ht / 2, z);
+      this.scene.add(t);
+      this.obstacles.push({ x, z, rx: w / 2, rz: w / 2 });
+    }
+
+    // THE NEXUS — a neon data-fountain landmark in the central plaza.
+    const nexus = new THREE.Group(); nexus.position.set(0, 0, 0);
+    const core = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.5, 0.9, 5.5, 12),
+      new THREE.MeshStandardMaterial({ color: 0x0c1830, emissive: 0x16e0ff, emissiveIntensity: 1.4, roughness: 0.4 }),
+    );
+    core.position.y = 2.75; nexus.add(core);
+    for (let i = 0; i < 3; i++) {
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(1.3 - i * 0.25, 0.08, 8, 28),
+        new THREE.MeshStandardMaterial({ color: 0x0c1830, emissive: i % 2 ? 0xff2d95 : 0x16e0ff, emissiveIntensity: 1.2 }),
+      );
+      ring.rotation.x = Math.PI / 2 + (i - 1) * 0.2; ring.position.y = 1.4 + i * 1.4; nexus.add(ring);
+    }
+    const np = new THREE.PointLight(0x16e0ff, 26, 26); np.position.set(0, 4, 0); nexus.add(np);
+    this.scene.add(nexus); this.nexus = nexus;
+    this.obstacles.push({ x: 0, z: 0, rx: 1.3, rz: 1.3 });
   }
 
   // ---------------- physical shop buildings ----------------
@@ -1470,6 +1554,14 @@ export class OverworldScene {
     for (let i = 0; i < this.searchlights.length; i++) {
       const ph = t * 0.22 + i * 3.0;
       this.searchlights[i].position.set(Math.sin(ph) * 34, 0.06, Math.cos(ph * 0.7) * 22);
+    }
+
+    // The Nexus — slow swirl + pulsing core glow
+    if (this.nexus) {
+      this.nexus.rotation.y += dt * 0.5;
+      const core = this.nexus.children[0] as THREE.Mesh;
+      const cm = core.material as THREE.MeshStandardMaterial;
+      cm.emissiveIntensity = 1.2 + Math.sin(t * 2.2) * 0.4;
     }
 
     // rain + occasional cyan lightning flash
