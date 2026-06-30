@@ -658,12 +658,20 @@ kbd {
   border: 1px solid #3a6f9f; border-radius: 50%; box-shadow: 0 0 12px rgba(57,208,255,.18);
   backdrop-filter: blur(2px); }
 .tc-btn.on { background: rgba(57,208,255,.35); color: #fff; border-color: #8fe3ff; }
-/* d-pad */
-.tc-dpad { position: absolute; left: calc(env(safe-area-inset-left, 0px) + 22px); bottom: calc(env(safe-area-inset-bottom, 0px) + 26px);
-  width: 168px; height: 168px; }
-.tc-dpad .tc-btn { position: absolute; width: 56px; height: 56px; border-radius: 14px; }
-.tc-up { top: 0; left: 56px; } .tc-down { bottom: 0; left: 56px; }
-.tc-left { left: 0; top: 56px; } .tc-right { right: 0; top: 56px; }
+/* virtual joystick: a wide capture zone (bottom-left), with a base ring + knob
+   that re-center under the thumb on touch (dynamic joystick). */
+.tc-joyzone { position: absolute; left: 0; bottom: 0; width: 48vw; height: 60vh;
+  pointer-events: auto; touch-action: none; }
+.tc-joy-base, .tc-joy-knob { position: absolute; transform: translate(-50%, -50%);
+  border-radius: 50%; pointer-events: none; will-change: left, top; }
+.tc-joy-base { width: 132px; height: 132px; left: calc(env(safe-area-inset-left,0px) + 96px);
+  bottom: auto; top: calc(100% - env(safe-area-inset-bottom,0px) - 110px);
+  border: 2px solid rgba(120,200,255,.45); background: rgba(10,18,34,.32);
+  box-shadow: 0 0 18px rgba(57,208,255,.18); opacity: .5; transition: opacity .12s; }
+.tc-joy-knob { width: 62px; height: 62px; left: calc(env(safe-area-inset-left,0px) + 96px);
+  top: calc(100% - env(safe-area-inset-bottom,0px) - 110px);
+  border: 2px solid #8fe3ff; background: rgba(57,208,255,.4);
+  box-shadow: 0 0 16px rgba(57,208,255,.45); }
 /* action cluster */
 .tc-actions { position: absolute; right: calc(env(safe-area-inset-right, 0px) + 22px); bottom: calc(env(safe-area-inset-bottom, 0px) + 30px);
   display: flex; flex-direction: column-reverse; align-items: center; gap: 14px; pointer-events: none; }
@@ -746,7 +754,6 @@ body.touch #dg-hint { display: none !important; }
 }
 @media (max-width: 560px) {
   .db-grid, .shop-grid, .ops-cosgrid, .db-proggrid { grid-template-columns: repeat(2, 1fr) !important; }
-  .tc-dpad { transform: scale(.9); transform-origin: bottom left; }
   .tc-actions { transform: scale(.92); transform-origin: bottom right; }
 }
 
