@@ -35,7 +35,36 @@ STYLE = ("HD-2D cyberpunk pixel art, neon-noir Blade Runner palette, glowing "
 
 # A character SPEC = the part decomposition. Each slot has a default mount anchor
 # [x,y,z] (in a ~2.2-unit-tall character) + target height, and N variant prompts.
+# A spec may override STYLE with its own `style` preamble (e.g. clean hero pixel
+# art instead of neon-noir). The bright GREEN chroma bg + "single isolated part"
+# rules must stay so pixelsnap can key it out.
+MEGA_STYLE = (
+    "clean bright PIXEL ART, classic Mega Man X / Battle Network hero-robot style, "
+    "glossy rounded armor in heroic BLUE and light-blue with white and cyan accents, "
+    "bold dark outlines, crisp chunky pixels, simple cel shading. SINGLE isolated "
+    "part, centered and fully in frame, on a solid flat bright GREEN chroma "
+    "background. No body, no ground, no shadow, no text, no people.")
+
 CHARS = {
+    "mega": {
+        "desc": "a heroic blue battle android (Mega Man X / .EXE style)",
+        "style": MEGA_STYLE,
+        "slots": {
+            "body":   {"anchor": [0, 0, 0],        "h": 2.2, "variants": {
+                "base": "the full BODY of {d}: armored torso with a small round chest gem, arms with rounded shoulder pods and gauntlets, and legs with chunky boots, all in glossy blue-and-light-blue armor, NO head, T-pose, front view"}},
+            "head":   {"anchor": [0, 1.96, 0],     "h": 0.66, "variants": {
+                "classic": "just the HEAD of {d}: the iconic rounded blue helmet with a central crest fin and round ear-pods, a determined youthful face with green eyes, front view",
+                "visor":   "just the HEAD of {d}: a sleek blue helmet with a single glowing cyan visor band across the eyes and round ear-pods, front view",
+                "blade":   "just the HEAD of {d}: a blue helmet with two forward-swept blade horns and round ear-pods, glowing cyan eyes, front view"}},
+            "weapon": {"anchor": [0.6, 1.02, 0.18], "h": 1.3, "variants": {
+                "buster": "a blue arm-cannon MEGA BUSTER: a chunky cylindrical cannon with a glowing cyan muzzle, held pointing forward",
+                "saber":  "a glowing cyan energy SABER: a bright cyan plasma blade with a short blue hilt, held vertical",
+                "shield": "a round blue energy SHIELD with a glowing cyan rim and a central emblem, front view"}},
+            "pack":   {"anchor": [0, 1.15, -0.28],  "h": 0.9, "variants": {
+                "none":  "a tiny flat blank blue armor plate (a minimal back panel), front view",
+                "jets":  "a pair of blue jet THRUSTER boosters with glowing cyan exhaust nozzles, rear booster pack, front view"}},
+        },
+    },
     "ronin": {
         "desc": "a lean cyberpunk street-samurai netrunner",
         "slots": {
@@ -66,14 +95,23 @@ def main():
     outdir = Path("public/models/parts") / args.char
     raw.mkdir(parents=True, exist_ok=True); outdir.mkdir(parents=True, exist_ok=True)
     key = load_key()
+    # merge into an existing manifest so partial --slots runs accumulate
     manifest = {"char": args.char, "desc": spec["desc"], "slots": {}}
+    mpath = outdir / "manifest.json"
+    if mpath.exists():
+        try:
+            old = json.loads(mpath.read_text())
+            if old.get("char") == args.char and isinstance(old.get("slots"), dict):
+                manifest["slots"] = old["slots"]
+        except Exception:
+            pass
 
     for slot, sd in spec["slots"].items():
         if only and slot not in only: continue
         manifest["slots"][slot] = {"anchor": sd["anchor"], "h": sd["h"], "variants": []}
         for variant, vp in sd["variants"].items():
             stem = f"{slot}_{variant}"
-            prompt = vp.format(d=spec["desc"]) + ". " + STYLE
+            prompt = vp.format(d=spec["desc"]) + ". " + spec.get("style", STYLE)
             print(f"\n=== {args.char}/{stem} ===")
             seed = raw / f"{stem}.png"
             gen_image(prompt, seed)
@@ -98,8 +136,8 @@ def main():
                     print("glb", glbp, glbp.stat().st_size)
             manifest["slots"][slot]["variants"].append(entry)
 
-    (outdir / "manifest.json").write_text(json.dumps(manifest, indent=2))
-    print("\nmanifest ->", outdir / "manifest.json")
+    mpath.write_text(json.dumps(manifest, indent=2))
+    print("\nmanifest ->", mpath)
 
 
 if __name__ == "__main__":
