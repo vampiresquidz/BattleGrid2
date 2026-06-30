@@ -151,6 +151,8 @@ export class OverworldScene {
   private neonLights: Array<{ l: THREE.PointLight; base: number; ph: number }> = []; // flickering signage
   private traffic: Array<{ mesh: THREE.Mesh; speed: number; len: number }> = [];      // highway light streaks
   private mist: THREE.Sprite[] = [];                            // drifting low ground haze
+  private roadRects: Array<{ x: number; z: number; rx: number; rz: number }> = [];     // ground-road footprints
+  private buildingRects: Array<{ x: number; z: number; rx: number; rz: number }> = []; // shop/tower footprints
   private scene = new THREE.Scene();
   private camera: THREE.PerspectiveCamera;
   private clock = new THREE.Clock();
@@ -390,8 +392,24 @@ export class OverworldScene {
     this.buildShards();
     this.buildBeacons();
 
+    this.validateRoads();
+
     this.syncPlayer();
     this.updateCamera(true);
+  }
+
+  // dev guard: warn if any shop/tower footprint overlaps a road strip (so the
+  // "buildings off the roads" invariant can't silently regress).
+  private validateRoads() {
+    if (!new URLSearchParams(location.search).has('dev')) return;
+    let hits = 0;
+    for (const b of this.buildingRects)
+      for (const r of this.roadRects)
+        if (Math.abs(b.x - r.x) < b.rx + r.rx - 0.05 && Math.abs(b.z - r.z) < b.rz + r.rz - 0.05) {
+          hits++;
+          console.warn(`[roads] building @(${b.x},${b.z}) sits on road @(${r.x},${r.z})`);
+        }
+    console.log(`[roads] ${this.roadRects.length} roads, ${this.buildingRects.length} buildings, ${hits} overlaps`);
   }
 
   // ---------------- world content ----------------
@@ -406,7 +424,7 @@ export class OverworldScene {
   private buildActors() {
     // The Fixer — a job-broker droid that gives & tracks the "Lost Index" quest.
     const oracle = this.makeSprite(textures.fixerbot(), 2.8);
-    this.addActor(oracle, -9, 3, 1.4, 2.8,
+    this.addActor(oracle, -6, 6, 1.4, 2.8,
       () => (getQuestStage() === 0 ? 'Talk to the Oracle ·  !'
         : getQuestStage() === 1 && this.questComplete() ? 'Claim · The Lost Index'
         : 'Talk to the Oracle'),
@@ -414,7 +432,7 @@ export class OverworldScene {
 
     // The Archivist — a vendor-droid that hands out lore + shard hints.
     const arch = this.makeSprite(textures.vendordroid(), 3.0);
-    this.addActor(arch, -7, 17, 1.5, 2.8,
+    this.addActor(arch, 6, 6, 1.5, 2.8,
       () => 'Talk to the Archivist',
       () => this.startDialogue([
         'Archivist: "Fragments of a deleted index drift across the sectors."',
@@ -424,7 +442,7 @@ export class OverworldScene {
 
     // The Net Dungeon Portal — a swirling rift into a freshly generated maze.
     const portal = this.makeSprite(orbTexture('#ffd6ff', '#b03aff'), 3.6);
-    this.addActor(portal, 0, -7, 2.1, 3.0,
+    this.addActor(portal, 0, -14, 2.1, 3.0,    // a rift in the south avenue out of the roundabout
       () => 'Enter the GRID DUNGEON ·  ▣',
       () => this.opts.onPortal?.('net'), 0.22);
 
@@ -509,14 +527,17 @@ export class OverworldScene {
     }
 
     // in-map landmark towers (corpo blocks) — solid, so you weave between them.
-    const blocks: Array<[number, number, number, number]> = [ // x, z, w, height (clear of pickups/NPCs)
-      [12, -22, 6, 16], [-18, 8, 6, 18], [18, -10, 6, 14], [10, 24, 6, 15], [-30, 18, 7, 20],
+    // Each sits in a block interior (between road lines), so roads pass around
+    // them, never under them.
+    const blocks: Array<[number, number, number, number]> = [ // x, z, w, height
+      [7.5, -18, 6, 16], [-22.5, -6, 6, 18], [22.5, -6, 6, 14], [-7.5, 18, 6, 15], [22.5, 18, 7, 20],
     ];
     for (const [x, z, w, ht] of blocks) {
       const t = this.makeTower(w, ht, w, tex);
       t.position.set(x, ht / 2, z);
       this.scene.add(t);
       this.obstacles.push({ x, z, rx: w / 2, rz: w / 2 });
+      this.buildingRects.push({ x, z, rx: w / 2, rz: w / 2 });
     }
 
     // THE NEXUS — a neon data-fountain landmark in the central plaza.
@@ -619,6 +640,9 @@ export class OverworldScene {
     const grp = new THREE.Group();
     grp.position.set(cx, y, cz); grp.rotation.y = angleY; grp.add(plane);
     this.scene.add(grp);
+    // record the axis-aligned footprint so we can verify nothing sits on it
+    const along = Math.abs(((angleY % Math.PI) + Math.PI) % Math.PI) < 0.01; // length runs along z
+    this.roadRects.push({ x: cx, z: cz, rx: along ? width / 2 : length / 2, rz: along ? length / 2 : width / 2 });
   }
 
   // An elevated neon highway: a dark deck on pillars with glowing guard-rails and
@@ -664,10 +688,17 @@ export class OverworldScene {
 
   private buildRoads() {
     const base = this.roadTexture();
-    // vertical avenues (run N–S along z) — shops & towers front onto them
-    for (const x of [-28, -14, 14, 28]) this.addRoad(base, x, 0, 58, 4.4, 0, 0.05);
-    // cross streets (run E–W along x) — staggered height to avoid intersection z-fight
-    for (const z of [-18, -9, 9, 18]) this.addRoad(base, 0, z, 84, 4.4, Math.PI / 2, 0.06);
+    // Outer grid routed through the GAPS between building blocks (avenues run
+    // N–S at x=±15,±30; cross streets run E–W at z=±12,±24). Every shop & tower
+    // sits in a block interior and fronts one of these — none sits on a road.
+    for (const x of [-30, -15, 15, 30]) this.addRoad(base, x, 0, 52, 4.4, 0, 0.05);
+    for (const z of [-24, -12, 12, 24]) this.addRoad(base, 0, z, 68, 4.4, Math.PI / 2, 0.06);
+    // four spokes feeding the central roundabout (the x=0 / z=0 lines, split so
+    // they meet the ring instead of crossing the Nexus island)
+    this.addRoad(base, 0, 17, 18, 4.4, 0, 0.055);            // N spoke  z[8,26]
+    this.addRoad(base, 0, -17, 18, 4.4, 0, 0.055);           // S spoke  z[-26,-8]
+    this.addRoad(base, 21, 0, 26, 4.4, Math.PI / 2, 0.065);  // E spoke  x[8,34]
+    this.addRoad(base, -21, 0, 26, 4.4, Math.PI / 2, 0.065); // W spoke  x[-34,-8]
     // a roundabout around The Nexus in the central plaza
     const band = new THREE.Mesh(
       new THREE.RingGeometry(4.6, 8, 48),
@@ -683,11 +714,12 @@ export class OverworldScene {
       new THREE.MeshStandardMaterial({ color: 0x0c1018, emissive: 0x16e0ff, emissiveIntensity: 1.2 }),
     );
     laneLine.rotation.x = Math.PI / 2; laneLine.position.y = 0.09; this.scene.add(laneLine);
-    // elevated highways sweeping across the far skyline (scenic, outside play bounds)
-    this.addHighway(0, 34, 100, 0, 9);
-    this.addHighway(0, -34, 100, 0, 8);
-    this.addHighway(-46, 0, 78, Math.PI / 2, 10);
-    this.addHighway(22, 40, 70, -0.5, 11);
+    // elevated highways forming a ring that FRAMES the city (outside the play
+    // bounds, so they never cross the plaza or the streets)
+    this.addHighway(0, 36, 100, Math.PI / 2, 10);  // north overpass (runs E–W)
+    this.addHighway(0, -36, 100, Math.PI / 2, 8);  // south overpass (runs E–W)
+    this.addHighway(-44, 2, 80, 0, 11);            // west overpass (runs N–S)
+    this.addHighway(46, -2, 80, 0, 9);             // east overpass (runs N–S)
   }
 
   // ---------------- physical shop buildings ----------------
@@ -695,9 +727,9 @@ export class OverworldScene {
     // a marketplace plaza just south of spawn — each is a building you walk up
     // to and press E to enter its store.
     const shops: Array<{ name: string; sub: string; accent: number; x: number; z: number; open: () => void }> = [
-      { name: 'AGENT SHOP', sub: 'chassis & shells',     accent: 0xffcf3a, x: -15, z: -3,  open: () => this.openRoster() },
-      { name: 'CHIP SHOP',  sub: 'battlechips',          accent: 0xff5db4, x: 15,  z: -3,  open: () => this.openShop() },
-      { name: 'EXCHANGE',   sub: '◊ FLUX · daily ops',   accent: 0x67e0ff, x: 0,   z: -17, open: () => this.openOps() },
+      { name: 'AGENT SHOP', sub: 'chassis & shells',     accent: 0xffcf3a, x: -7.5, z: -6,  open: () => this.openRoster() },
+      { name: 'CHIP SHOP',  sub: 'battlechips',          accent: 0xff5db4, x: 7.5,  z: -6,  open: () => this.openShop() },
+      { name: 'EXCHANGE',   sub: '◊ FLUX · daily ops',   accent: 0x67e0ff, x: -7.5, z: -18, open: () => this.openOps() },
     ];
     for (const s of shops) this.makeBuilding(s.name, s.sub, s.accent, s.x, s.z, s.open);
     // plaza fill so the storefronts read against the dark ground
@@ -740,6 +772,7 @@ export class OverworldScene {
 
     this.buildings.push({ group, body, accent });
     this.obstacles.push({ x, z, rx: W / 2, rz: D / 2 });
+    this.buildingRects.push({ x, z, rx: W / 2, rz: D / 2 });
 
     // interact marker at the door (a glowing orb you walk up to; E enters)
     const hex = '#' + accent.toString(16).padStart(6, '0');
