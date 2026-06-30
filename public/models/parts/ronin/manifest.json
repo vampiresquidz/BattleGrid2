@@ -1,0 +1,61 @@
+{
+  "char": "ronin",
+  "desc": "a lean cyberpunk street-samurai netrunner",
+  "slots": {
+    "body": {
+      "anchor": [
+        0,
+        0,
+        0
+      ],
+      "h": 2.2,
+      "variants": [
+        {
+          "variant": "base",
+          "png": "/models/parts/ronin/body_base.png",
+          "glb": "/models/parts/ronin/body_base.glb"
+        }
+      ]
+    },
+    "head": {
+      "anchor": [
+        0,
+        1.95,
+        0
+      ],
+      "h": 0.62,
+      "variants": [
+        {
+          "variant": "visor",
+          "png": "/models/parts/ronin/head_visor.png",
+          "glb": "/models/parts/ronin/head_visor.glb"
+        },
+        {
+          "variant": "hood",
+          "png": "/models/parts/ronin/head_hood.png",
+          "glb": "/models/parts/ronin/head_hood.glb"
+        }
+      ]
+    },
+    "weapon": {
+      "anchor": [
+        0.55,
+        1.0,
+        0.15
+      ],
+      "h": 1.4,
+      "variants": [
+        {
+          "variant": "katana",
+          "png": "/models/parts/ronin/weapon_katana.png",
+          "glb": "/models/parts/ronin/weapon_katana.glb"
+        },
+        {
+          "variant": "baton",
+          "png": "/models/parts/ronin/weapon_baton.png",
+          "glb": "/models/parts/ronin/weapon_baton.glb"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Modular 3D Pixel Character — Assembler</title>
+<style>
+  html,body{margin:0;height:100%;background:#070910;color:#cfe6ff;font:13px ui-monospace,monospace;overflow:hidden}
+  #ui{position:fixed;top:12px;left:12px;z-index:2;display:flex;flex-direction:column;gap:10px}
+  .slot{background:rgba(10,18,34,.7);border:1px solid #2a3f6b;border-radius:8px;padding:8px 10px}
+  .slot b{color:#16e0ff;letter-spacing:.06em}
+  button{background:#13233f;color:#cfe6ff;border:1px solid #3a6f9f;border-radius:6px;padding:5px 9px;cursor:pointer;font:12px ui-monospace}
+  button:hover{border-color:#8fe3ff}
+  #title{position:fixed;top:12px;right:14px;z-index:2;color:#ff2d95;font-weight:700;letter-spacing:.08em;text-shadow:0 0 10px #ff2d95}
+</style>
+</head>
+<body>
+<div id="title">MODULAR · <span id="cname">…</span></div>
+<div id="ui"></div>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const params = new URLSearchParams(location.search);
+const CHAR = params.get('char') || 'ronin';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x070910);
+const cam = new THREE.PerspectiveCamera(40, innerWidth/innerHeight, 0.1, 100);
+cam.position.set(0, 1.6, 6);
+const rend = new THREE.WebGLRenderer({ antialias:true });
+rend.setPixelRatio(Math.min(devicePixelRatio,2)); rend.setSize(innerWidth,innerHeight);
+document.body.appendChild(rend.domElement);
+scene.add(new THREE.AmbientLight(0x88aaff, 1.1));
+const k = new THREE.PointLight(0x16e0ff, 40, 30); k.position.set(4,6,5); scene.add(k);
+const p = new THREE.PointLight(0xff2d95, 30, 30); p.position.set(-5,3,2); scene.add(p);
+const root = new THREE.Group(); scene.add(root);
+// a little neon disc the character stands on
+const disc = new THREE.Mesh(new THREE.CircleGeometry(1.6,40), new THREE.MeshStandardMaterial({color:0x101826,emissive:0x163a5a,emissiveIntensity:.5,metalness:.4,roughness:.5}));
+disc.rotation.x=-Math.PI/2; scene.add(disc);
+
+const loader = new GLTFLoader();
+const mounted = {};            // slot -> THREE.Object3D currently in the scene
+let manifest = null, sel = {};
+
+function normalize(model, targetH){
+  const bb = new THREE.Box3().setFromObject(model);
+  const size = new THREE.Vector3(); bb.getSize(size);
+  const s = targetH / (size.y || 1);
+  model.scale.setScalar(s);
+  model.traverse(o=>{ if(o.isMesh){ const m=o.material; if(m){ m.emissive=new THREE.Color(0x223a66); m.emissiveMap=m.map||null; m.emissiveIntensity=.7; } }});
+  return s;
+}
+// place a freshly-loaded GLB for a slot using its manifest anchor + height
+function place(model, slot){
+  const s = normalize(model, slot.h);
+  const bb = new THREE.Box3().setFromObject(model);
+  const c = new THREE.Vector3(); bb.getCenter(c);
+  const min = bb.min, [ax,ay,az] = slot.anchor;
+  if (slot._name === 'body')      model.position.set(-c.x, -min.y, -c.z);               // feet on the disc
+  else if (slot._name === 'head') model.position.set(ax-c.x, ay-min.y, az-c.z);          // neck sits at anchor.y
+  else                            model.position.set(ax-c.x, ay-c.y, az-c.z);            // centered in hand
+  void s;
+}
+
+async function setSlot(name){
+  const slot = manifest.slots[name]; slot._name = name;
+  const v = slot.variants[sel[name]];
+  if (mounted[name]) { root.remove(mounted[name]); mounted[name]=null; }
+  if (!v || !v.glb) return;
+  const g = await loader.loadAsync(v.glb);
+  place(g.scene, slot);
+  mounted[name] = g.scene; root.add(g.scene);
+}
+
+function buildUI(){
+  const ui = document.getElementById('ui'); ui.innerHTML='';
+  for (const name of Object.keys(manifest.slots)){
+    const slot = manifest.slots[name];
+    sel[name] = 0;
+    const row = document.createElement('div'); row.className='slot';
+    const label = document.createElement('div'); label.innerHTML = `<b>${name.toUpperCase()}</b> <span class="v">${slot.variants[0]?.variant||'—'}</span>`;
+    const btn = document.createElement('button'); btn.textContent='▶ swap';
+    btn.onclick = async ()=>{ sel[name]=(sel[name]+1)%slot.variants.length; label.querySelector('.v').textContent=slot.variants[sel[name]].variant; await setSlot(name); };
+    row.append(label, btn); ui.append(row);
+  }
+}
+
+(async ()=>{
+  document.getElementById('cname').textContent = CHAR;
+  manifest = await (await fetch(`/models/parts/${CHAR}/manifest.json`)).json();
+  document.getElementById('cname').textContent = (manifest.desc||CHAR);
+  buildUI();
+  for (const name of Object.keys(manifest.slots)) await setSlot(name);
+  window.__ready = true;
+})();
+
+addEventListener('resize', ()=>{ cam.aspect=innerWidth/innerHeight; cam.updateProjectionMatrix(); rend.setSize(innerWidth,innerHeight); });
+let t=0;
+(function loop(){ requestAnimationFrame(loop); t+=0.01; root.rotation.y = Math.sin(t)*0.6; cam.lookAt(0,1.1,0); rend.render(scene,cam); })();
+</script>
+</body>
+</html>
