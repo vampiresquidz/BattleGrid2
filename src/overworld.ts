@@ -153,6 +153,8 @@ export class OverworldScene {
   private mist: THREE.Sprite[] = [];                            // drifting low ground haze
   private roadRects: Array<{ x: number; z: number; rx: number; rz: number }> = [];     // ground-road footprints
   private buildingRects: Array<{ x: number; z: number; rx: number; rz: number }> = []; // shop/tower footprints
+  private rooftopAnims: Array<(t: number, dt: number) => void> = [];                    // animated rooftop scenes
+  private rooftopBeacons: Array<{ m: THREE.Mesh; ph: number }> = [];                    // blinking skyline aviation lights
   private scene = new THREE.Scene();
   private camera: THREE.PerspectiveCamera;
   private clock = new THREE.Clock();
@@ -524,6 +526,16 @@ export class OverworldScene {
       t.position.set(x, ht / 2 - 5, z);
       t.rotation.y = Math.random() * 0.6 - 0.3;
       this.scene.add(t);
+      // a blinking red aviation beacon on every other skyline tower → living skyline
+      if (i % 2 === 0) {
+        const beacon = new THREE.Mesh(
+          new THREE.SphereGeometry(0.5, 6, 6),
+          new THREE.MeshStandardMaterial({ color: 0x200000, emissive: 0xff3020, emissiveIntensity: 1.4 }),
+        );
+        beacon.position.set(x, ht - 5 + 0.5, z);
+        this.scene.add(beacon);
+        this.rooftopBeacons.push({ m: beacon, ph: Math.random() * 6.28 });
+      }
     }
 
     // in-map landmark towers (corpo blocks) — solid, so you weave between them.
@@ -532,13 +544,14 @@ export class OverworldScene {
     const blocks: Array<[number, number, number, number]> = [ // x, z, w, height
       [7.5, -18, 6, 16], [-22.5, -6, 6, 18], [22.5, -6, 6, 14], [-7.5, 18, 6, 15], [22.5, 18, 7, 20],
     ];
-    for (const [x, z, w, ht] of blocks) {
+    blocks.forEach(([x, z, w, ht], i) => {
       const t = this.makeTower(w, ht, w, tex);
       t.position.set(x, ht / 2, z);
       this.scene.add(t);
       this.obstacles.push({ x, z, rx: w / 2, rz: w / 2 });
       this.buildingRects.push({ x, z, rx: w / 2, rz: w / 2 });
-    }
+      this.decorateRooftop(x, z, ht, w, i); // nightclub / pool / helipad / billboard / comms
+    });
 
     // THE NEXUS — a neon data-fountain landmark in the central plaza.
     const nexus = new THREE.Group(); nexus.position.set(0, 0, 0);
@@ -557,6 +570,153 @@ export class OverworldScene {
     const np = new THREE.PointLight(0x16e0ff, 26, 26); np.position.set(0, 4, 0); nexus.add(np);
     this.scene.add(nexus); this.nexus = nexus;
     this.obstacles.push({ x: 0, z: 0, rx: 1.3, rz: 1.3 });
+  }
+
+  // ---------------- rooftop scenes (one per landmark tower) ----------------
+  private decorateRooftop(cx: number, cz: number, topY: number, w: number, kind: number) {
+    switch (kind % 5) {
+      case 0: this.roofNightclub(cx, cz, topY, w); break;
+      case 1: this.roofPool(cx, cz, topY, w); break;
+      case 2: this.roofHelipad(cx, cz, topY, w); break;
+      case 3: this.roofBillboard(cx, cz, topY, w); break;
+      default: this.roofCommsArray(cx, cz, topY, w); break;
+    }
+  }
+
+  private roofSign(text: string, accent: number): THREE.Sprite {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 64;
+    const g = c.getContext('2d')!;
+    const hex = '#' + accent.toString(16).padStart(6, '0');
+    g.font = 'bold 40px ui-monospace, monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = hex; g.shadowColor = hex; g.shadowBlur = 16; g.fillText(text, 128, 34);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+    sp.scale.set(4.4, 1.1, 1);
+    return sp;
+  }
+
+  // A throbbing rooftop club: a colour-cycling dance floor, a neon rail, spinning
+  // laser beams and a glowing sign.
+  private roofNightclub(cx: number, cz: number, topY: number, w: number) {
+    const g = new THREE.Group(); g.position.set(cx, topY + 0.02, cz); this.scene.add(g);
+    const n = 4, cell = (w - 1.2) / n;
+    const hues = [0x16e0ff, 0xff2d95, 0x9b5cff, 0xffb020, 0xaaff36, 0xffffff];
+    const mats: THREE.MeshStandardMaterial[] = [];
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      const m = new THREE.MeshStandardMaterial({ color: 0x101018, emissive: hues[(i + j) % hues.length], emissiveIntensity: 0.8, roughness: 0.4 });
+      mats.push(m);
+      const tile = new THREE.Mesh(new THREE.BoxGeometry(cell * 0.9, 0.12, cell * 0.9), m);
+      tile.position.set((i - (n - 1) / 2) * cell, 0.06, (j - (n - 1) / 2) * cell);
+      g.add(tile);
+    }
+    const rail = new THREE.Mesh(new THREE.TorusGeometry(w * 0.6, 0.05, 6, 32),
+      new THREE.MeshStandardMaterial({ color: 0x0c1018, emissive: 0xff2d95, emissiveIntensity: 1.2 }));
+    rail.rotation.x = Math.PI / 2; rail.position.y = 0.5; g.add(rail);
+    const lasers = new THREE.Group(); lasers.position.y = 0.6; g.add(lasers);
+    const beamCols = [0x16e0ff, 0xff2d95, 0xaaff36];
+    for (let k = 0; k < 3; k++) {
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 7, 6),
+        new THREE.MeshBasicMaterial({ color: beamCols[k], transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }));
+      beam.position.y = 3.2; beam.rotation.z = 0.5; beam.rotation.y = k * 2.1;
+      const pivot = new THREE.Group(); pivot.add(beam); lasers.add(pivot);
+    }
+    const sign = this.roofSign('◈ CLUB XR', 0xff2d95); sign.position.set(0, w * 0.55 + 1.0, 0); g.add(sign);
+    const pl = new THREE.PointLight(0xff2d95, 9, w * 3.5); pl.position.y = 1.6; g.add(pl);
+    this.rooftopAnims.push((t) => {
+      for (let idx = 0; idx < mats.length; idx++) mats[idx].emissiveIntensity = 0.5 + 0.5 * Math.sin(t * 4 + idx * 0.7);
+      lasers.rotation.y = t * 1.2;
+      pl.intensity = 7 + Math.sin(t * 8) * 4;
+    });
+  }
+
+  // A rooftop infinity pool: a glowing, shimmering water slab with deck & cabana lights.
+  private roofPool(cx: number, cz: number, topY: number, w: number) {
+    const g = new THREE.Group(); g.position.set(cx, topY + 0.02, cz); this.scene.add(g);
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(w - 0.4, 0.1, w - 0.4),
+      new THREE.MeshStandardMaterial({ color: 0x1a2030, roughness: 0.85 }));
+    deck.position.y = 0.05; g.add(deck);
+    const waterMat = new THREE.MeshStandardMaterial({
+      color: 0x0a3a5a, emissive: 0x16c0ff, emissiveIntensity: 0.7,
+      transparent: true, opacity: 0.86, roughness: 0.12, metalness: 0.6,
+    });
+    const water = new THREE.Mesh(new THREE.BoxGeometry(w - 1.7, 0.16, w - 1.7), waterMat);
+    water.position.y = 0.13; g.add(water);
+    const edgeMat = new THREE.MeshStandardMaterial({ color: 0x0c1018, emissive: 0x16e0ff, emissiveIntensity: 1.0 });
+    for (const s of [-1, 1]) {
+      const e = new THREE.Mesh(new THREE.BoxGeometry(w - 1.5, 0.08, 0.12), edgeMat);
+      e.position.set(0, 0.2, s * (w * 0.43)); g.add(e);
+    }
+    for (const [lx, lz] of [[-1, -1], [1, 1]] as const) {
+      const u = new THREE.PointLight(0xffd27f, 4, 7); u.position.set(lx * w * 0.32, 0.9, lz * w * 0.32); g.add(u);
+    }
+    this.rooftopAnims.push((t) => { waterMat.emissiveIntensity = 0.5 + 0.3 * Math.sin(t * 2.2); });
+  }
+
+  // A helipad: marked landing disc with a blinking light ring.
+  private roofHelipad(cx: number, cz: number, topY: number, w: number) {
+    const g = new THREE.Group(); g.position.set(cx, topY + 0.02, cz); this.scene.add(g);
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.46, w * 0.46, 0.12, 24),
+      new THREE.MeshStandardMaterial({ color: 0x14161e, emissive: 0x223040, emissiveIntensity: 0.4, roughness: 0.9 }));
+    pad.position.y = 0.06; g.add(pad);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(w * 0.32, 0.05, 6, 28),
+      new THREE.MeshStandardMaterial({ color: 0x0c1018, emissive: 0xffe24a, emissiveIntensity: 1.0 }));
+    ring.rotation.x = Math.PI / 2; ring.position.y = 0.13; g.add(ring);
+    const hMat = new THREE.MeshStandardMaterial({ color: 0x0c1018, emissive: 0xffe24a, emissiveIntensity: 1.0 });
+    const bar = (x: number) => { const b = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.06, 1.3), hMat); b.position.set(x, 0.14, 0); g.add(b); };
+    bar(-0.42); bar(0.42);
+    const cross = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.06, 0.2), hMat); cross.position.set(0, 0.14, 0); g.add(cross);
+    const blinkers: THREE.MeshStandardMaterial[] = [];
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2;
+      const dm = new THREE.MeshStandardMaterial({ color: 0x200000, emissive: 0xff3020, emissiveIntensity: 1.2 });
+      const dot = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 6), dm);
+      dot.position.set(Math.cos(a) * w * 0.45, 0.2, Math.sin(a) * w * 0.45); g.add(dot); blinkers.push(dm);
+    }
+    this.rooftopAnims.push((t) => { const on = Math.sin(t * 4) > 0; for (const m of blinkers) m.emissiveIntensity = on ? 1.6 : 0.15; });
+  }
+
+  // A flickering neon billboard on a frame.
+  private roofBillboard(cx: number, cz: number, topY: number, w: number) {
+    const g = new THREE.Group(); g.position.set(cx, topY, cz); g.rotation.y = Math.random() * Math.PI; this.scene.add(g);
+    const legMat = new THREE.MeshStandardMaterial({ color: 0x0a0c12, roughness: 1 });
+    for (const s of [-1, 1]) { const leg = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.4, 0.18), legMat); leg.position.set(s * w * 0.3, 1.2, 0); g.add(leg); }
+    const texts = ['NEON-9', 'XR-7', '◊ TIDE', 'GRID//', 'SYNTH'];
+    const cols = [0x16e0ff, 0xff2d95, 0x9b5cff, 0xffb020];
+    const tx = texts[(Math.random() * texts.length) | 0], col = cols[(Math.random() * cols.length) | 0];
+    const tex = this.billboardTexture(tx, col);
+    const panelMat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.9, color: 0x05060a, side: THREE.DoubleSide });
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.95, 2.0), panelMat);
+    panel.position.y = 3.3; g.add(panel);
+    this.rooftopAnims.push((t) => { panelMat.emissiveIntensity = 0.75 + 0.25 * Math.sin(t * 5) + (Math.random() < 0.02 ? -0.5 : 0); });
+  }
+
+  private billboardTexture(text: string, accent: number): THREE.Texture {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 96;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#08060e'; g.fillRect(0, 0, 256, 96);
+    const hex = '#' + accent.toString(16).padStart(6, '0');
+    g.strokeStyle = hex; g.lineWidth = 4; g.strokeRect(8, 8, 240, 80);
+    g.font = 'bold 44px ui-monospace, monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = hex; g.shadowColor = hex; g.shadowBlur = 18; g.fillText(text, 128, 50);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  }
+
+  // A rooftop comms array: a rotating radar dish, a mast and a blinking aviation light.
+  private roofCommsArray(cx: number, cz: number, topY: number, w: number) {
+    const g = new THREE.Group(); g.position.set(cx, topY + 0.02, cz); this.scene.add(g);
+    const hut = new THREE.Mesh(new THREE.BoxGeometry(w * 0.5, 0.8, w * 0.5),
+      new THREE.MeshStandardMaterial({ color: 0x12151f, emissive: 0x16283f, emissiveIntensity: 0.3, roughness: 0.9 }));
+    hut.position.y = 0.4; g.add(hut);
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 4, 8),
+      new THREE.MeshStandardMaterial({ color: 0x0a0c12, roughness: 1 }));
+    mast.position.y = 2.8; g.add(mast);
+    const bm = new THREE.MeshStandardMaterial({ color: 0x200000, emissive: 0xff3020, emissiveIntensity: 1.5 });
+    const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), bm); beacon.position.y = 4.9; g.add(beacon);
+    const dishPivot = new THREE.Group(); dishPivot.position.y = 1.1; g.add(dishPivot);
+    const dish = new THREE.Mesh(new THREE.SphereGeometry(0.95, 12, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+      new THREE.MeshStandardMaterial({ color: 0x1a1f2c, emissive: 0x16e0ff, emissiveIntensity: 0.4, side: THREE.DoubleSide, metalness: 0.4, roughness: 0.5 }));
+    dish.rotation.x = -Math.PI * 0.3; dish.position.set(w * 0.16, 0.5, 0); dishPivot.add(dish);
+    this.rooftopAnims.push((t) => { dishPivot.rotation.y = t * 0.8; bm.emissiveIntensity = Math.sin(t * 5) > 0.6 ? 2.2 : 0.2; });
   }
 
   // ---------------- sky: moon + stars ----------------
@@ -1767,6 +1927,11 @@ export class OverworldScene {
       const cm = core.material as THREE.MeshStandardMaterial;
       cm.emissiveIntensity = 1.2 + Math.sin(t * 2.2) * 0.4;
     }
+
+    // rooftop scenes (club floors, lasers, radar dishes, pools) + skyline beacons
+    for (const fn of this.rooftopAnims) fn(t, dt);
+    for (const b of this.rooftopBeacons)
+      (b.m.material as THREE.MeshStandardMaterial).emissiveIntensity = Math.sin(t * 3 + b.ph) > 0.7 ? 1.8 : 0.15;
 
     // ---- weather: rain rolls in, then clears off, on a slow cycle ----
     this.weatherT -= dt;
