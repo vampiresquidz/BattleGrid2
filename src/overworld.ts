@@ -27,10 +27,10 @@ const GradeShader = {
 
 // NEON-9 light rain + occasional lightning, as a cheap screen-space overlay.
 const RainShader = {
-  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, flash: { value: 0 } },
+  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, flash: { value: 0 }, intensity: { value: 1 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
   fragmentShader: `
-    uniform sampler2D tDiffuse; uniform float time; uniform float flash; varying vec2 vUv;
+    uniform sampler2D tDiffuse; uniform float time; uniform float flash; uniform float intensity; varying vec2 vUv;
     float h(float x){ return fract(sin(x*91.345)*43758.5453); }
     void main(){
       vec4 c = texture2D(tDiffuse, vUv);
@@ -41,7 +41,7 @@ const RainShader = {
       float t = fract(uv.y * 6.0 + time * spd + h(col + 7.0));
       float drop = smoothstep(0.0, 0.04, t) * smoothstep(0.55, 0.0, t);     // falling dash
       float xl = smoothstep(0.82, 1.0, 1.0 - abs(fract(uv.x * N) - 0.5) * 2.0);
-      c.rgb += drop * xl * (0.4 + 0.6 * h(col + 3.0)) * vec3(0.5, 0.66, 0.82) * 0.22;
+      c.rgb += drop * xl * (0.4 + 0.6 * h(col + 3.0)) * vec3(0.5, 0.66, 0.82) * 0.22 * intensity;
       c.rgb += flash * vec3(0.22, 0.42, 0.6);        // cyan lightning lift
       gl_FragColor = c;
     }`,
@@ -143,6 +143,14 @@ export class OverworldScene {
   private flashT = 0;
   private searchlights: THREE.Mesh[] = [];
   private nexus?: THREE.Object3D;
+  // weather: rain rolls in and clears off on a slow cycle (0 = dry, 1 = downpour)
+  private weather = 1;
+  private weatherTarget = 1;
+  private weatherT = 16;
+  private topMat?: THREE.MeshStandardMaterial;                 // wet-asphalt ground (sheen tracks weather)
+  private neonLights: Array<{ l: THREE.PointLight; base: number; ph: number }> = []; // flickering signage
+  private traffic: Array<{ mesh: THREE.Mesh; speed: number; len: number }> = [];      // highway light streaks
+  private mist: THREE.Sprite[] = [];                            // drifting low ground haze
   private scene = new THREE.Scene();
   private camera: THREE.PerspectiveCamera;
   private clock = new THREE.Clock();
@@ -262,6 +270,7 @@ export class OverworldScene {
       map: top, emissiveMap: top, emissive: 0x16283f, emissiveIntensity: 0.4,
       color: 0x232838, roughness: 0.5, metalness: 0.35, // wet sheen reflecting neon, but ground still reads
     });
+    this.topMat = topMat;
     const cliffMat = new THREE.MeshStandardMaterial({
       map: cliff, emissiveMap: cliff, emissive: 0x4a2a8f, emissiveIntensity: 0.35,
       color: 0x2a2d38, roughness: 0.8, metalness: 0.3,
@@ -297,6 +306,7 @@ export class OverworldScene {
       const l = new THREE.PointLight(c, 22, r);
       l.position.set(x, y, z);
       this.scene.add(l);
+      this.neonLights.push({ l, base: 22, ph: Math.random() * 6.28 }); // subtle cyberpunk flicker
     }
 
     // street furniture — neon street lamps + glowing bollards (was crystals)
@@ -336,6 +346,15 @@ export class OverworldScene {
       m.rotation.x = -Math.PI / 2; m.position.y = 0.06;
       this.scene.add(m); this.searchlights.push(m);
     }
+
+    // sky: a hazy moon + faint star wash for depth above the smog
+    this.buildSky();
+
+    // streets: a neon-lined road grid + elevated background highways
+    this.buildRoads();
+
+    // low drifting ground haze (volumetric feel, catches the neon)
+    this.buildMist();
 
     // the megacity itself: a neon skyline ring + landmark towers + The Nexus
     this.buildCity();
@@ -517,6 +536,158 @@ export class OverworldScene {
     const np = new THREE.PointLight(0x16e0ff, 26, 26); np.position.set(0, 4, 0); nexus.add(np);
     this.scene.add(nexus); this.nexus = nexus;
     this.obstacles.push({ x: 0, z: 0, rx: 1.3, rz: 1.3 });
+  }
+
+  // ---------------- sky: moon + stars ----------------
+  private buildSky() {
+    // a faint star wash on a far dome (fog dims the lower ones → depth)
+    const n = 380;
+    const g = new THREE.BufferGeometry();
+    const p = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const el = 0.12 + Math.random() * 1.2;            // mostly upper hemisphere
+      const r = 150;
+      p[i * 3] = Math.cos(a) * Math.cos(el) * r;
+      p[i * 3 + 1] = Math.sin(el) * r * 0.8 + 18;
+      p[i * 3 + 2] = Math.sin(a) * Math.cos(el) * r;
+    }
+    g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+    const stars = new THREE.Points(g, new THREE.PointsMaterial({
+      color: 0xbfe6ff, size: 0.9, sizeAttenuation: true, transparent: true,
+      opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+    }));
+    this.scene.add(stars);
+
+    // a big hazy moon low over the skyline — bloom turns it into a soft glow
+    const moon = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: orbTexture('#f4faff', '#7fa8d8'), transparent: true,
+      blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, fog: false,
+    }));
+    moon.scale.set(34, 34, 1);
+    moon.position.set(58, 60, -135);
+    this.scene.add(moon);
+  }
+
+  // ---------------- low ground haze ----------------
+  private buildMist() {
+    for (let i = 0; i < 7; i++) {
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: orbTexture('#3a4a66', '#0a0e18'), transparent: true, opacity: 0.16,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      }));
+      const sc = 30 + Math.random() * 26;
+      s.scale.set(sc, sc * 0.5, 1);
+      s.position.set((Math.random() - 0.5) * 76, 1.2 + Math.random() * 1.6, (Math.random() - 0.5) * 52);
+      this.scene.add(s);
+      this.mist.push(s);
+    }
+  }
+
+  // ---------------- streets: road grid + elevated highways ----------------
+  // Wet asphalt with glowing neon lane markings (cyan edges + amber centre
+  // dashes). Dark base, bright lines → the lines bloom. Tiles along its length.
+  private roadTexture(): THREE.Texture {
+    const w = 64, h = 128;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const g = cv.getContext('2d')!;
+    g.fillStyle = '#0f1118'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 70; i++) { // faint asphalt mottle
+      g.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.22)';
+      g.fillRect((Math.random() * w) | 0, (Math.random() * h) | 0, 2, 2);
+    }
+    g.fillStyle = '#16e0ff';                                  // glowing cyan edge lines
+    g.fillRect(5, 0, 3, h); g.fillRect(w - 8, 0, 3, h);
+    g.fillStyle = '#ffc23a';                                  // amber centre dashes
+    for (let y = 0; y < h; y += 30) g.fillRect(w / 2 - 2, y, 4, 16);
+    const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
+    t.magFilter = THREE.NearestFilter; t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    return t;
+  }
+
+  private addRoad(base: THREE.Texture, cx: number, cz: number, length: number, width: number, angleY = 0, y = 0.05) {
+    const tex = base.clone(); tex.needsUpdate = true;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(1, Math.max(1, Math.round(length / 8)));
+    const mat = new THREE.MeshStandardMaterial({
+      map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.7,
+      color: 0x171a22, roughness: 0.42, metalness: 0.5,
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+    });
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(width, length), mat);
+    plane.rotation.x = -Math.PI / 2;
+    const grp = new THREE.Group();
+    grp.position.set(cx, y, cz); grp.rotation.y = angleY; grp.add(plane);
+    this.scene.add(grp);
+  }
+
+  // An elevated neon highway: a dark deck on pillars with glowing guard-rails and
+  // streaking traffic lights, sweeping across the far skyline (outside play bounds).
+  private addHighway(cx: number, cz: number, length: number, angleY: number, y: number) {
+    const grp = new THREE.Group(); grp.position.set(cx, y, cz); grp.rotation.y = angleY;
+    const deck = new THREE.Mesh(
+      new THREE.BoxGeometry(6, 0.5, length),
+      new THREE.MeshStandardMaterial({ color: 0x0d0f16, roughness: 0.8, metalness: 0.4 }),
+    );
+    grp.add(deck);
+    const rail = (xoff: number, col: number) => {
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(0.25, 0.5, length),
+        new THREE.MeshStandardMaterial({ color: 0x0c1018, emissive: col, emissiveIntensity: 1.1 }),
+      );
+      m.position.set(xoff, 0.4, 0); grp.add(m);
+    };
+    rail(3, 0x16e0ff); rail(-3, 0xff2d95);
+    const under = new THREE.Mesh(                                   // amber underglow strip
+      new THREE.BoxGeometry(5, 0.12, length),
+      new THREE.MeshStandardMaterial({ color: 0x110a02, emissive: 0xffb020, emissiveIntensity: 0.7 }),
+    );
+    under.position.y = -0.32; grp.add(under);
+    const pillarMat = new THREE.MeshStandardMaterial({ color: 0x0a0c12, roughness: 1 });
+    for (let d = -length / 2 + 6; d <= length / 2 - 6; d += 14) {   // support pillars
+      const p = new THREE.Mesh(new THREE.BoxGeometry(1.2, y, 1.2), pillarMat);
+      p.position.set(0, -y / 2 - 0.25, d); grp.add(p);
+    }
+    // streaking traffic — headlights (white, +z) and taillights (red, -z)
+    const car = (xoff: number, col: number, dirSign: number) => {
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(0.5, 0.18, 1.4),
+        new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 1.6 }),
+      );
+      m.position.set(xoff, 0.34, (Math.random() - 0.5) * length);
+      grp.add(m);
+      this.traffic.push({ mesh: m, speed: dirSign * (10 + Math.random() * 12), len: length });
+    };
+    for (let i = 0; i < 3; i++) { car(1.6, 0xfff2d0, 1); car(-1.6, 0xff3344, -1); }
+    this.scene.add(grp);
+  }
+
+  private buildRoads() {
+    const base = this.roadTexture();
+    // vertical avenues (run N–S along z) — shops & towers front onto them
+    for (const x of [-28, -14, 14, 28]) this.addRoad(base, x, 0, 58, 4.4, 0, 0.05);
+    // cross streets (run E–W along x) — staggered height to avoid intersection z-fight
+    for (const z of [-18, -9, 9, 18]) this.addRoad(base, 0, z, 84, 4.4, Math.PI / 2, 0.06);
+    // a roundabout around The Nexus in the central plaza
+    const band = new THREE.Mesh(
+      new THREE.RingGeometry(4.6, 8, 48),
+      new THREE.MeshStandardMaterial({
+        color: 0x171a22, emissive: 0x0a1420, emissiveIntensity: 0.5,
+        roughness: 0.42, metalness: 0.5, side: THREE.DoubleSide,
+        polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+      }),
+    );
+    band.rotation.x = -Math.PI / 2; band.position.y = 0.07; this.scene.add(band);
+    const laneLine = new THREE.Mesh(
+      new THREE.TorusGeometry(6.3, 0.06, 6, 56),
+      new THREE.MeshStandardMaterial({ color: 0x0c1018, emissive: 0x16e0ff, emissiveIntensity: 1.2 }),
+    );
+    laneLine.rotation.x = Math.PI / 2; laneLine.position.y = 0.09; this.scene.add(laneLine);
+    // elevated highways sweeping across the far skyline (scenic, outside play bounds)
+    this.addHighway(0, 34, 100, 0, 9);
+    this.addHighway(0, -34, 100, 0, 8);
+    this.addHighway(-46, 0, 78, Math.PI / 2, 10);
+    this.addHighway(22, 40, 70, -0.5, 11);
   }
 
   // ---------------- physical shop buildings ----------------
@@ -1022,7 +1193,7 @@ export class OverworldScene {
     });
     this.composer.addPass(this.bokeh);
     this.composer.addPass(new UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight), 0.75, 0.55, 0.7,
+      new THREE.Vector2(window.innerWidth, window.innerHeight), 0.95, 0.62, 0.62,
     ));
     this.composer.addPass(new ShaderPass(GradeShader));
     this.rainPass = new ShaderPass(RainShader);
@@ -1564,11 +1735,50 @@ export class OverworldScene {
       cm.emissiveIntensity = 1.2 + Math.sin(t * 2.2) * 0.4;
     }
 
-    // rain + occasional cyan lightning flash
+    // ---- weather: rain rolls in, then clears off, on a slow cycle ----
+    this.weatherT -= dt;
+    if (this.weatherT <= 0) {
+      const goWet = this.weatherTarget < 0.5;
+      this.weatherTarget = goWet ? 1 : 0;
+      this.weatherT = goWet ? 34 + Math.random() * 40 : 26 + Math.random() * 34;
+      this.toast(goWet ? '▓ rain moving in' : '☼ skies clearing');
+    }
+    this.weather += (this.weatherTarget - this.weather) * Math.min(1, dt * 0.12);
+    const wet = this.weather;
+    // wet ground turns glossier with more neon sheen; fog closes in when it pours
+    if (this.topMat) {
+      this.topMat.metalness = 0.3 + wet * 0.35;
+      this.topMat.emissiveIntensity = 0.32 + wet * 0.22 + Math.sin(t * 1.3) * 0.02 * wet;
+    }
+    if (this.scene.fog instanceof THREE.Fog) this.scene.fog.far = 240 - wet * 70;
+
+    // rain overlay + cyan lightning — only when it's actually raining
     this.rainPass.uniforms.time.value = t;
-    if (this.flashT <= 0 && Math.random() < dt * 0.05) this.flashT = 0.22;
+    this.rainPass.uniforms.intensity.value = wet;
+    if (this.flashT <= 0 && Math.random() < dt * 0.05 * wet) this.flashT = 0.22;
     this.flashT = Math.max(0, this.flashT - dt * 1.4);
-    this.rainPass.uniforms.flash.value = this.flashT * (0.6 + 0.4 * Math.random());
+    this.rainPass.uniforms.flash.value = this.flashT * (0.6 + 0.4 * Math.random()) * wet;
+
+    // highway traffic streaks
+    for (const c of this.traffic) {
+      let z = c.mesh.position.z + c.speed * dt;
+      const half = c.len / 2;
+      if (z > half) z -= c.len; else if (z < -half) z += c.len;
+      c.mesh.position.z = z;
+    }
+
+    // neon signage flicker (occasional brown-out dip)
+    for (const nf of this.neonLights) {
+      const f = 0.82 + 0.18 * Math.sin(t * 3.0 + nf.ph) + (Math.random() < 0.01 ? -0.4 : 0);
+      nf.l.intensity = nf.base * Math.max(0.3, f);
+    }
+
+    // drift the low ground haze
+    for (let i = 0; i < this.mist.length; i++) {
+      const m = this.mist[i];
+      m.position.x += dt * (0.4 + (i % 3) * 0.2);
+      if (m.position.x > 42) m.position.x = -42;
+    }
 
     this.composer.render();
   };
