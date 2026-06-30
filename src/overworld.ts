@@ -24,6 +24,28 @@ const GradeShader = {
       gl_FragColor = c;
     }`,
 };
+
+// NEON-9 light rain + occasional lightning, as a cheap screen-space overlay.
+const RainShader = {
+  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, flash: { value: 0 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform float time; uniform float flash; varying vec2 vUv;
+    float h(float x){ return fract(sin(x*91.345)*43758.5453); }
+    void main(){
+      vec4 c = texture2D(tDiffuse, vUv);
+      vec2 uv = vUv; uv.x += uv.y * 0.16;            // slanted rain
+      float N = 150.0;
+      float col = floor(uv.x * N);
+      float spd = 0.8 + h(col) * 1.6;
+      float t = fract(uv.y * 6.0 + time * spd + h(col + 7.0));
+      float drop = smoothstep(0.0, 0.04, t) * smoothstep(0.55, 0.0, t);     // falling dash
+      float xl = smoothstep(0.82, 1.0, 1.0 - abs(fract(uv.x * N) - 0.5) * 2.0);
+      c.rgb += drop * xl * (0.4 + 0.6 * h(col + 3.0)) * vec3(0.5, 0.66, 0.82) * 0.22;
+      c.rgb += flash * vec3(0.22, 0.42, 0.6);        // cyan lightning lift
+      gl_FragColor = c;
+    }`,
+};
 import { textures, orbTexture, humanoidTexture, humanoidCanvas, humanoidWalkTexture, WALK_FRAMES } from './sprites.ts';
 import { SpriteAnim } from './anim.ts';
 import { ENEMY_COUNT } from './battle.ts';
@@ -117,6 +139,9 @@ export class OverworldScene {
   private renderer: THREE.WebGLRenderer;
   private composer!: EffectComposer;
   private bokeh!: BokehPass;
+  private rainPass!: ShaderPass;
+  private flashT = 0;
+  private searchlights: THREE.Mesh[] = [];
   private scene = new THREE.Scene();
   private camera: THREE.PerspectiveCamera;
   private clock = new THREE.Clock();
@@ -222,27 +247,25 @@ export class OverworldScene {
   }
 
   private build() {
-    // light haze only — the diorama slab should be VISIBLE floating in the void
-    // (Octopath HD-2D), not fogged out. Pushed out for the larger continent.
-    this.scene.fog = new THREE.Fog(0x0b0a20, 90, 250);
-    this.scene.background = textures.alienSky();
-    this.scene.backgroundIntensity = 0.4; // dim the nebula so the slab reads as the subject
+    // NEON-9: a rain-slick cyberpunk megacity at perpetual night. Smog haze + a
+    // dark wet-asphalt slab; neon point-lights + bloom carry the colour.
+    this.scene.fog = new THREE.Fog(0x14161f, 70, 210);
+    this.scene.background = new THREE.Color(0x0d0f16); // smog night sky
 
-    // HD-2D diorama: the world sits on a raised terrain SLAB with thick, visible
-    // cliff edges (like an Octopath floating tabletop), not an infinite plane.
+    // the city block sits on a wet-asphalt SLAB; cliff edges = concrete/metal.
     const top = textures.alienGround();
     top.wrapS = top.wrapT = THREE.RepeatWrapping; top.repeat.set(13, 9);
     const cliff = textures.alienCliff();
     cliff.repeat.set(18, 1);
     const topMat = new THREE.MeshStandardMaterial({
-      map: top, emissiveMap: top, emissive: 0x2f4ec0, emissiveIntensity: 0.45,
-      color: 0x6b78ad, roughness: 1, metalness: 0.05,
+      map: top, emissiveMap: top, emissive: 0x16283f, emissiveIntensity: 0.4,
+      color: 0x232838, roughness: 0.5, metalness: 0.35, // wet sheen reflecting neon, but ground still reads
     });
     const cliffMat = new THREE.MeshStandardMaterial({
-      map: cliff, emissiveMap: cliff, emissive: 0x6a3aff, emissiveIntensity: 0.5,
-      color: 0x342a52, roughness: 1,
+      map: cliff, emissiveMap: cliff, emissive: 0x4a2a8f, emissiveIntensity: 0.35,
+      color: 0x2a2d38, roughness: 0.8, metalness: 0.3,
     });
-    const darkMat = new THREE.MeshStandardMaterial({ color: 0x06050d, roughness: 1 });
+    const darkMat = new THREE.MeshStandardMaterial({ color: 0x05060a, roughness: 1 });
     // BoxGeometry face order: [+x, -x, +y(top), -y(bottom), +z, -z]
     const slab = new THREE.Mesh(
       new THREE.BoxGeometry(88, 6, 62),
@@ -252,48 +275,65 @@ export class OverworldScene {
     slab.receiveShadow = true;
     this.scene.add(slab);
 
-    // lighting — low cool ambient (keeps the ground in shadow so glow pops) +
-    // a soft key, plus accent rims spread across the bigger map.
-    this.scene.add(new THREE.AmbientLight(0x474e80, 1.0));
-    const sun = new THREE.DirectionalLight(0xc8d4ff, 0.9);
+    // lighting — very low cold ambient (night) + dim moonlight, then strong NEON
+    // pools (pink/cyan/violet/amber) that bloom and reflect off the wet road.
+    this.scene.add(new THREE.AmbientLight(0x1c2236, 0.95));
+    const sun = new THREE.DirectionalLight(0x7a88aa, 0.32); // cold moonlight
     sun.position.set(-6, 16, 8);
     this.scene.add(sun);
     const accents: Array<[number, number, number, number, number]> = [
-      [0x2fd6ff, 5, 6, 5, 52],     // cyan core
-      [0xc44ff0, -8, 6, -3, 48],   // magenta core
-      [0xffb070, 0, 5, 9, 44],     // warm key (Octopath lantern feel)
-      [0x2fd6ff, 28, 7, -14, 62],  // far cyan
-      [0xc44ff0, -30, 7, 13, 62],  // far magenta
-      [0x2fd6ff, -26, 7, -16, 60], // far cyan 2
-      [0xffb070, 26, 6, 16, 54],   // far warm
+      [0x16e0ff, 5, 6, 5, 52],     // neon cyan core
+      [0xff2d95, -8, 6, -3, 48],   // neon pink core
+      [0xffb020, 0, 5, 9, 44],     // amber warning glow
+      [0x16e0ff, 28, 7, -14, 62],  // far cyan
+      [0xff2d95, -30, 7, 13, 62],  // far pink
+      [0x9b5cff, -26, 7, -16, 60], // far violet
+      [0xff2d95, 26, 6, 16, 54],   // far pink 2
+      [0x9b5cff, 14, 6, -22, 50],  // violet
+      [0xaaff36, -16, 6, 22, 46],  // toxic lime accent
     ];
     for (const [c, x, y, z, r] of accents) {
-      const l = new THREE.PointLight(c, 16, r);
+      const l = new THREE.PointLight(c, 22, r);
       l.position.set(x, y, z);
       this.scene.add(l);
     }
 
-    // scenery spread across the whole continent
-    const crystalSpots: Array<[number, number]> = [
+    // street furniture — neon street lamps + glowing bollards (was crystals)
+    const lampSpots: Array<[number, number]> = [
       [12, -6], [-14, 6], [19, -8], [26, 14], [-27, -8], [31, 4],
       [-33, 16], [14, 22], [-12, -18], [35, -12], [-36, 2], [22, -18],
       [-20, 20], [33, 18], [-30, -18], [8, -22],
     ];
-    for (const [x, z] of crystalSpots) this.addProp(textures.crystal(), x, z, 3.2, false, 0);
-    const spireSpots: Array<[number, number]> = [
+    for (const [x, z] of lampSpots) this.addProp(textures.citylamp(), x, z, 3.2, false, 0);
+    // tall holographic billboards / neon sign towers (was spires)
+    const signSpots: Array<[number, number]> = [
       [16, 5], [-20, -5], [28, -3], [-28, 11], [21, 19], [-24, -17],
       [36, 15], [-37, -3], [18, -16], [-16, 17],
     ];
-    for (const [x, z] of spireSpots) this.addProp(textures.spire(), x, z, 4.4, false, 0);
-    // data-storms (battle zones) — tiered by region; kept clear of NPCs/caches
-    // so you're never ambushed mid-conversation or mid-loot.
+    for (const [x, z] of signSpots) this.addProp(textures.citysign(), x, z, 4.6, false, 0);
+    // grime: dumpsters / AC condensers + steam vents
+    const dumpSpots: Array<[number, number]> = [[10, 9], [-9, -14], [24, -2], [-30, 9], [17, -24]];
+    for (const [x, z] of dumpSpots) this.addProp(textures.dumpster(), x, z, 2.6, false, 0);
+    const ventSpots: Array<[number, number]> = [[-6, 8], [13, -2], [-18, -3], [29, 8], [-13, 13]];
+    for (const [x, z] of ventSpots) this.addProp(textures.vent(), x, z, 1.9, false, 0);
+    // data-storms (battle zones) → sparking broken terminals / dead android husks
     const stormSpots: Array<[number, number]> = [
-      [6, 4], [-11, -8], [2, -4],                          // inner
-      [20, -9], [-21, -11], [24, 13], [-18, 17],           // outer
-      [34, -20], [-35, 6], [27, 22], [-34, -22], [16, 24], // deep
+      [6, 4], [-11, -8], [2, -4],                          // slums
+      [20, -9], [-21, -11], [24, 13], [-18, 17],           // corpo core
+      [34, -20], [-35, 6], [27, 22], [-34, -22], [16, 24], // the wires
     ];
     for (const [x, z] of stormSpots) {
-      this.addProp(textures.alienFlora(), x, z, 3.2, true, Math.max(0, regionAt(x, z)));
+      this.addProp(textures.terminal(), x, z, 3.0, true, Math.max(0, regionAt(x, z)));
+    }
+
+    // searchlights — bright soft pools sweeping the wet street (from blimps above)
+    for (let i = 0; i < 2; i++) {
+      const m = new THREE.Mesh(
+        new THREE.CircleGeometry(7, 32),
+        new THREE.MeshBasicMaterial({ map: orbTexture('#ffffff', '#cfe6ff'), transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false }),
+      );
+      m.rotation.x = -Math.PI / 2; m.position.y = 0.06;
+      this.scene.add(m); this.searchlights.push(m);
     }
 
     // physical shop buildings (a marketplace plaza near spawn)
@@ -341,16 +381,16 @@ export class OverworldScene {
   }
 
   private buildActors() {
-    // The Oracle — gives & tracks the "Lost Index" quest.
-    const oracle = this.makeSprite(textures.mermaid(), 2.8);
+    // The Fixer — a job-broker droid that gives & tracks the "Lost Index" quest.
+    const oracle = this.makeSprite(textures.fixerbot(), 2.8);
     this.addActor(oracle, -9, 3, 1.4, 2.8,
       () => (getQuestStage() === 0 ? 'Talk to the Oracle ·  !'
         : getQuestStage() === 1 && this.questComplete() ? 'Claim · The Lost Index'
         : 'Talk to the Oracle'),
       () => this.talkOracle(), 0.06);
 
-    // The Archivist — flavor lore, hints about shards.
-    const arch = this.makeSprite(humanoidTexture('#46e0a0', 'front', 0.9, 'cortex'), 3.0);
+    // The Archivist — a vendor-droid that hands out lore + shard hints.
+    const arch = this.makeSprite(textures.vendordroid(), 3.0);
     this.addActor(arch, -7, 17, 1.5, 2.8,
       () => 'Talk to the Archivist',
       () => this.startDialogue([
@@ -901,6 +941,8 @@ export class OverworldScene {
       new THREE.Vector2(window.innerWidth, window.innerHeight), 0.75, 0.55, 0.7,
     ));
     this.composer.addPass(new ShaderPass(GradeShader));
+    this.rainPass = new ShaderPass(RainShader);
+    this.composer.addPass(this.rainPass);
     this.composer.addPass(new OutputPass());
   }
 
@@ -1423,6 +1465,19 @@ export class OverworldScene {
     // keep depth-of-field focused on the player as you zoom/move
     const bk = this.bokeh.uniforms as Record<string, { value: number }>;
     bk['focus'].value = this.camera.position.distanceTo(new THREE.Vector3(this.pos.x, 1.2, this.pos.y));
+
+    // searchlights sweep across the city
+    for (let i = 0; i < this.searchlights.length; i++) {
+      const ph = t * 0.22 + i * 3.0;
+      this.searchlights[i].position.set(Math.sin(ph) * 34, 0.06, Math.cos(ph * 0.7) * 22);
+    }
+
+    // rain + occasional cyan lightning flash
+    this.rainPass.uniforms.time.value = t;
+    if (this.flashT <= 0 && Math.random() < dt * 0.05) this.flashT = 0.22;
+    this.flashT = Math.max(0, this.flashT - dt * 1.4);
+    this.rainPass.uniforms.flash.value = this.flashT * (0.6 + 0.4 * Math.random());
+
     this.composer.render();
   };
 

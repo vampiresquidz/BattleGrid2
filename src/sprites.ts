@@ -24,6 +24,14 @@ export const textures = {
   crab: () => loadPixel('/sprites/enemy_crab.png'),
   shark: () => loadPixel('/sprites/enemy_shark.png'),
   mermaid: () => loadPixel('/sprites/ally_mermaid.png'),
+  // NEON-9 cyberpunk overworld props + NPC droids
+  citysign: () => loadPixel('/sprites/world_citysign.png'),
+  citylamp: () => loadPixel('/sprites/world_citylamp.png'),
+  dumpster: () => loadPixel('/sprites/world_dumpster.png'),
+  vent: () => loadPixel('/sprites/world_vent.png'),
+  terminal: () => loadPixel('/sprites/world_terminal.png'),
+  vendordroid: () => loadPixel('/sprites/ally_vendordroid.png'),
+  fixerbot: () => loadPixel('/sprites/ally_fixerbot.png'),
   // Italian brainrot meme battlers
   goblinmonkey: () => loadPixel('/sprites/meme_goblinmonkey.png'),
   tungtung: () => loadPixel('/sprites/meme_tungtung.png'),
