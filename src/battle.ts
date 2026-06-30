@@ -31,6 +31,8 @@ const TILE_W = 1.12;
 const TILE_D = 1.12;
 const PLAYER_COLS = [0, 1, 2, 3, 4];
 const CUSTOM_TIME = 7; // seconds for the custom gauge to fill
+const HAND_SIZE = 6;   // chips shown in the Custom window; a PERSISTENT hand —
+                       // only chips you pick are consumed & redrawn, the rest stay
 
 const colX = (col: number) => (col - (COLS - 1) / 2) * TILE_W;
 const rowZ = (row: number) => (row - (ROWS - 1) / 2) * TILE_D;
@@ -211,6 +213,7 @@ export class BattleScene {
   private custom = CUSTOM_TIME;       // starts full so you can pick opening chips
   private queue: Chip[] = [];
   private drawPile: Chip[];
+  private hand: Chip[] = [];          // persistent Custom-window hand (carries over)
   private paused = false;
   private over = false;
 
@@ -655,6 +658,11 @@ export class BattleScene {
       .join('');
   }
 
+  // top up the persistent hand from the draw pile (used before each Custom window)
+  private refillHand() {
+    while (this.hand.length < HAND_SIZE && this.drawPile.length) this.hand.push(this.drawPile.shift()!);
+  }
+
   // ---------------- Custom window ----------------
   private openCustom() {
     if (this.custom < CUSTOM_TIME || this.over) return;
@@ -663,7 +671,8 @@ export class BattleScene {
     // Each enemy-side column you hold grants +1 RAM (cap +3) — territory → tempo.
     const dc = this.territoryBonus();   // captured data centers → bonus RAM
     const ram = 6 + dc + this.nav.ram;  // NaviCust Extra RAM adds to the pool
-    const hand = this.drawPile.slice(0, 6);
+    this.refillHand();                  // unpicked chips persist; only top up gaps
+    const hand = this.hand;
     const selected: Chip[] = [];
 
     // a chip's cost, discounted by 1 (min 1) if it combos (same NAME/CODE) with
@@ -733,7 +742,12 @@ export class BattleScene {
         } else {
           this.queue.push(...selected);
         }
-        this.drawPile = [...this.drawPile.slice(hand.length), ...hand]; // rotate hand to the back
+        // consume ONLY the picked chips: pull them from the hand and recycle them
+        // to the bottom of the deck, then refill the gaps. Unpicked chips stay,
+        // so they're there again next cycle (and an empty pick leaves it intact).
+        for (const c of selected) { const i = this.hand.indexOf(c); if (i >= 0) this.hand.splice(i, 1); }
+        this.drawPile.push(...selected);
+        this.refillHand();
         this.custom = 0;
       }
       this.updateHUD();
@@ -2029,6 +2043,7 @@ export class BattleScene {
     this.syncEntity(this.player, this.playerPos);
     this.syncEntity(this.enemy, this.enemyPos);
     this.queue = [];
+    this.drawPile = shuffle(buildStarterFolder()); this.hand = []; // fresh folder + hand vs. the next foe
     this.custom = CUSTOM_TIME;
     for (const p of this.projectiles) this.scene.remove(p.sprite);
     this.projectiles = [];
