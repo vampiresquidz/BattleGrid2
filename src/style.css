@@ -650,7 +650,10 @@ kbd {
 #pwa-install { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 90;
   font-size: 12px; letter-spacing: .06em; padding: 7px 14px; }
 
-#touch-controls { position: fixed; inset: 0; z-index: 60; display: none; pointer-events: none;
+/* z-index 11: above the game canvas (0) but BELOW the HUD buttons (12) and every
+   modal/overlay (custom window 20, roster 30, warp 50, shops 80…) so on-screen
+   controls never steal taps from a modal (e.g. selecting battle chips). */
+#touch-controls { position: fixed; inset: 0; z-index: 11; display: none; pointer-events: none;
   -webkit-user-select: none; user-select: none; }
 .tc-btn { pointer-events: auto; touch-action: none; -webkit-user-select: none; user-select: none;
   display: flex; align-items: center; justify-content: center;
