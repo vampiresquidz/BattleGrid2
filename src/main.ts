@@ -6,7 +6,7 @@ import { BattleScene } from './battle.ts';
 import { OverworldScene } from './overworld.ts';
 import { login, isPhantomInstalled, tryEagerConnect, type Session } from './wallet.ts';
 import { runLoading } from './loadingScreen.ts';
-import { OVERWORLD_ASSETS, battleAssetsFor } from './loader.ts';
+import { overworldAssetsFor, battleAssetsFor } from './loader.ts';
 import { getSelectedBody } from './characters.ts';
 import { setTouchMode } from './touch.ts';
 import { startGuestMode, GUEST_SESSION } from './guest.ts';
@@ -146,7 +146,7 @@ async function showOverworld(session: Session, label = 'Loading sector…') {
   // preload overworld art behind the loading screen (startup + return-from-battle).
   // On return everything's cached so this resolves instantly; the small floor just
   // avoids a sub-frame flash.
-  await runLoading(app, OVERWORLD_ASSETS, { title: 'ABYSSAL&nbsp;GRID', label, minMs: 400 });
+  await runLoading(app, overworldAssetsFor(getSelectedBody()), { title: 'ABYSSAL&nbsp;GRID', label, minMs: 400 });
   setTouchMode('overworld');
   overworld = new OverworldScene(app, session, {
     onEncounter: (enemyIndex) => startEncounter(session, enemyIndex),
@@ -166,7 +166,7 @@ async function enterDungeon(session: Session, theme: 'net' | 'rat' = 'net') {
   overworld = null;
   startDungeonRun(1, theme);
   const label = theme === 'rat' ? 'Descending into the warrens…' : 'Generating dungeon…';
-  await runLoading(app, OVERWORLD_ASSETS, { title: 'JACKING IN', label, minMs: 400 });
+  await runLoading(app, overworldAssetsFor(getSelectedBody()), { title: 'JACKING IN', label, minMs: 400 });
   showDungeon(session);
 }
 
@@ -209,7 +209,7 @@ async function onDungeonBattleEnd(session: Session, win: boolean, boss: boolean)
     return;
   }
   if (run) run.enemiesCleared++;                                // back into the maze
-  await runLoading(app, OVERWORLD_ASSETS, { title: 'THE GRID DUNGEON', label: 'Re-entering the maze…', minMs: 250 });
+  await runLoading(app, overworldAssetsFor(getSelectedBody()), { title: 'THE GRID DUNGEON', label: 'Re-entering the maze…', minMs: 250 });
   showDungeon(session);
 }
 

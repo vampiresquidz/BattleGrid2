@@ -151,6 +151,20 @@ export const OVERWORLD_ASSETS = ALL_SPRITES.filter(
   // sheets are excluded outright.
   (u) => /\/(world_|ally_|player_|cortex_|monkey_|robot_|agent_|goblin_)|\/walk\//.test(u) && !/_battle|\/battle\//.test(u),
 );
+
+// body archetype → its overworld idle-base filename stem (differs from the id
+// for humanoid/evilbot). Mirrors AGENT_BODIES in sprites.ts.
+const BODY_IDLE_STEM: Record<string, string> = { humanoid: 'agent', monkey: 'monkey', evilbot: 'robot', cortex: 'cortex', goblin: 'goblin' };
+
+// Only what the overworld actually shows: world/NPC art + the ONE selected
+// body's idle bases + walk strips. The other chassis lazy-load when the agent
+// shop opens. Cuts the overworld preload from 5 bodies to 1 (faster jack-in).
+export function overworldAssetsFor(body: string): string[] {
+  const stem = BODY_IDLE_STEM[body] || 'agent';
+  const idle = new RegExp(`/${stem}_(base|back|right)`);
+  const walk = new RegExp(`/walk/${body}_`);
+  return ALL_SPRITES.filter((u) => /\/(world_|ally_|player_)/.test(u) || idle.test(u) || walk.test(u));
+}
 export const BATTLE_ASSETS = ALL_SPRITES.filter(
   (u) => /_battle|\/battle\/|anim_|enemy_|meme_/.test(u),
 );
