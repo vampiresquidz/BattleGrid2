@@ -11,8 +11,9 @@ export interface PartVariant { variant: string; png: string; glb?: string }
 export interface PartSlot { anchor: [number, number, number]; h: number; variants: PartVariant[] }
 export interface Manifest { char: string; desc: string; slots: Record<string, PartSlot> }
 
-// equip = the chosen variant name per slot + a hue rotation (degrees) for colour.
-export interface Equip { slots: Record<string, string>; hue: number }
+// equip = the chosen variant name per slot + a hue rotation (degrees) for colour
+// + an optional agent name (Stardew-style character creator).
+export interface Equip { slots: Record<string, string>; hue: number; name?: string }
 
 const FORGE_KEY = 'abyssal.forge';
 export const MEGA_CHAR = 'mega';

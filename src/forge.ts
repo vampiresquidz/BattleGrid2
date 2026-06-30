@@ -1,8 +1,18 @@
-// Character Forge: an in-game 3D customiser for the modular Mega Man build.
-// Rotating 3D preview + per-slot equip buttons (helmet / weapon / pack) + a hue
-// slider to recolour the whole suit. Persists the equip config (modular3d.ts).
+// Character Forge — a Stardew-style character creator for the modular Mega Man
+// build (pattern from the layered paper-doll tutorial: a live preview + one
+// "< value >" cycle row per attribute + Randomize + Create/Back). The 3D rig
+// (modular3d.ts) is our reliable equivalent of aligned sprite layers: each slot
+// mounts at a shared anchor, so swapping a part just swaps that layer.
 import * as THREE from 'three';
 import { createRig, loadManifest, getEquip, setEquip, MEGA_CHAR, type ModularRig, type Manifest } from './modular3d.ts';
+
+// colour presets cycled by the COLOUR row (hue = rotation applied to the blue base)
+const COLOURS: Array<{ name: string; hue: number }> = [
+  { name: 'Mega Blue', hue: 0 }, { name: 'Aqua', hue: 150 }, { name: 'Verdant', hue: 110 },
+  { name: 'Royal', hue: 60 }, { name: 'Magenta', hue: 90 }, { name: 'Crimson', hue: 170 },
+  { name: 'Amber', hue: 200 }, { name: 'Violet', hue: 40 },
+];
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export async function openForge(container: HTMLElement, onChange?: () => void, char = MEGA_CHAR): Promise<void> {
   if (document.getElementById('forge')) return;
@@ -13,18 +23,27 @@ export async function openForge(container: HTMLElement, onChange?: () => void, c
   el.id = 'forge';
   el.style.cssText = 'position:fixed;inset:0;z-index:62;display:flex;align-items:center;justify-content:center;background:rgba(4,8,18,.74)';
   el.innerHTML = `
-    <div class="roster-panel" style="max-width:680px;width:94%;max-height:92vh;overflow:auto">
-      <h2>CHARACTER FORGE</h2>
-      <div class="sub">Equip AI-generated parts and recolour your agent. Saves instantly.</div>
-      <div id="fg-stage" style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-top:12px">
+    <div class="roster-panel" style="max-width:660px;width:94%;max-height:92vh;overflow:auto">
+      <h2>CHARACTER CREATOR</h2>
+      <div class="sub">Cycle each part, recolour the suit, then Create your agent.</div>
+      <div style="display:flex;align-items:center;gap:8px;margin:12px 0 4px">
+        <label class="sub" style="margin:0">NAME</label>
+        <input id="fg-name" maxlength="16" placeholder="Agent"
+          style="flex:1;background:rgba(8,14,26,.8);border:1px solid #2c4a7a;border-radius:8px;color:#eaf3ff;padding:8px 10px;font:600 14px ui-monospace,monospace" />
+      </div>
+      <div id="fg-stage" style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-top:6px">
         <div id="fg-view" style="flex:1 1 280px;min-width:260px"></div>
         <div id="fg-controls" style="flex:1 1 280px;min-width:240px"></div>
       </div>
-      <button class="btn" data-act="done" style="margin-top:14px">Done · Esc</button>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn" data-act="rand" style="flex:0 0 auto">🎲 Randomise</button>
+        <button class="btn" data-act="create" style="flex:1">Create · Esc</button>
+      </div>
     </div>`;
   container.appendChild(el);
   const viewBox = el.querySelector('#fg-view') as HTMLElement;
   const controls = el.querySelector('#fg-controls') as HTMLElement;
+  const nameInput = el.querySelector('#fg-name') as HTMLInputElement;
 
   if (!manifest) {
     viewBox.innerHTML = '<div class="sub" style="padding:30px 0;text-align:center">3D parts are still generating — check back in a few minutes.</div>';
@@ -49,6 +68,8 @@ export async function openForge(container: HTMLElement, onChange?: () => void, c
   const root = new THREE.Group(); scene.add(root);
 
   const equip = getEquip();
+  nameInput.value = equip.name ?? '';
+  nameInput.oninput = () => { equip.name = nameInput.value.trim(); setEquip(equip); onChange?.(); };
   let rig: ModularRig | null = null;
   let dragging = false, lastX = 0, yaw = 0;
 
@@ -77,37 +98,64 @@ export async function openForge(container: HTMLElement, onChange?: () => void, c
     catch (e) { note.textContent = 'failed'; console.error('[forge] swap failed', e); }
   };
 
-  // ---- controls: per-slot variant chips (skip the single-variant body) ----
+  // a "LABEL  < value >" cycle row (the tutorial's per-attribute selector)
+  const cycleRow = (label: string, value: string, onStep: (dir: number) => void) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0;background:rgba(10,16,30,.55);border:1px solid #25406e;border-radius:9px;padding:6px 8px';
+    const lab = document.createElement('div'); lab.textContent = label;
+    lab.style.cssText = 'font:600 12px ui-monospace,monospace;color:#9cc6ff;letter-spacing:.05em;min-width:64px';
+    const mid = document.createElement('div');
+    mid.style.cssText = 'flex:1;display:flex;align-items:center;justify-content:space-between;gap:6px';
+    const arrow = (txt: string, dir: number) => {
+      const b = document.createElement('button'); b.textContent = txt;
+      b.style.cssText = 'background:rgba(103,224,255,.12);border:1px solid #3a6f9f;border-radius:7px;color:#cfe6ff;cursor:pointer;font:700 14px ui-monospace,monospace;padding:2px 10px';
+      b.onclick = () => onStep(dir); return b;
+    };
+    const val = document.createElement('div'); val.textContent = value;
+    val.style.cssText = 'flex:1;text-align:center;font:600 13px ui-monospace,monospace;color:#eaf3ff;text-transform:capitalize';
+    mid.append(arrow('‹', -1), val, arrow('›', 1));
+    row.append(lab, mid); return row;
+  };
+
   const renderControls = () => {
     if (!manifest) return;
     controls.innerHTML = '';
+    // one cycle row per multi-variant slot (skip single-variant body)
     for (const [name, slot] of Object.entries(manifest.slots)) {
-      if (slot.variants.length < 2) continue; // body etc.
-      const row = document.createElement('div'); row.style.cssText = 'margin:4px 0 12px';
-      const head = document.createElement('div'); head.className = 'sub';
-      head.textContent = name.toUpperCase(); head.style.marginBottom = '6px';
-      const wrap = document.createElement('div'); wrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px';
+      if (slot.variants.length < 2) continue;
       const cur = equip.slots[name] ?? slot.variants[0].variant;
-      for (const v of slot.variants) {
-        const on = v.variant === cur;
-        const b = document.createElement('button');
-        b.textContent = v.variant;
-        b.style.cssText = `padding:6px 12px;border-radius:8px;cursor:pointer;font:600 12px ui-monospace,monospace;text-transform:capitalize;` +
-          `border:1px solid ${on ? '#67e0ff' : '#2c4a7a'};background:${on ? 'rgba(103,224,255,.16)' : 'rgba(10,16,30,.6)'};color:#dfe9ff`;
-        b.onclick = async () => { equip.slots[name] = v.variant; setEquip(equip); renderControls(); await swap(name, v.variant); onChange?.(); };
-        wrap.appendChild(b);
-      }
-      row.append(head, wrap); controls.appendChild(row);
+      const idx = Math.max(0, slot.variants.findIndex((v) => v.variant === cur));
+      const step = async (dir: number) => {
+        const next = slot.variants[(idx + dir + slot.variants.length) % slot.variants.length];
+        equip.slots[name] = next.variant; setEquip(equip); renderControls(); await swap(name, next.variant); onChange?.();
+      };
+      controls.appendChild(cycleRow(name.toUpperCase(), cap(slot.variants[idx].variant), step));
     }
-    // hue slider
-    const hueRow = document.createElement('div'); hueRow.style.cssText = 'margin:10px 0';
-    const hl = document.createElement('div'); hl.className = 'sub'; hl.textContent = 'SUIT COLOUR'; hl.style.marginBottom = '6px';
-    const sl = document.createElement('input'); sl.type = 'range'; sl.min = '0'; sl.max = '360'; sl.value = String(equip.hue || 0);
-    sl.style.cssText = 'width:100%;accent-color:#67e0ff;background:linear-gradient(90deg,#39d0ff,#9b5cff,#ff2d95,#ffb020,#aaff36,#39d0ff);height:10px;border-radius:6px';
-    sl.oninput = () => { equip.hue = parseInt(sl.value, 10); rig?.setHue(equip.hue); setEquip(equip); onChange?.(); };
-    hueRow.append(hl, sl); controls.appendChild(hueRow);
+    // colour cycle row
+    const ci = Math.max(0, COLOURS.findIndex((c) => c.hue === (equip.hue || 0)));
+    const stepColour = (dir: number) => {
+      const c = COLOURS[(ci + dir + COLOURS.length) % COLOURS.length];
+      equip.hue = c.hue; rig?.setHue(c.hue); setEquip(equip); renderControls(); onChange?.();
+    };
+    controls.appendChild(cycleRow('COLOUR', COLOURS[ci]?.name ?? 'Custom', stepColour));
   };
   renderControls();
+
+  // randomise every attribute + colour (sequential swaps keep GPU load gentle)
+  const randomise = async () => {
+    if (!manifest) return;
+    for (const [name, slot] of Object.entries(manifest.slots)) {
+      if (slot.variants.length < 2) continue;
+      equip.slots[name] = slot.variants[(Math.random() * slot.variants.length) | 0].variant;
+    }
+    equip.hue = COLOURS[(Math.random() * COLOURS.length) | 0].hue;
+    setEquip(equip); renderControls();
+    for (const [name] of Object.entries(manifest.slots)) {
+      if (manifest.slots[name].variants.length < 2) continue;
+      await swap(name, equip.slots[name]);
+    }
+    rig?.setHue(equip.hue); onChange?.();
+  };
 
   // drag to spin
   renderer.domElement.addEventListener('pointerdown', (e) => { dragging = true; lastX = e.clientX; });
@@ -131,6 +179,7 @@ export async function openForge(container: HTMLElement, onChange?: () => void, c
   };
   const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); close(); } };
   window.addEventListener('keydown', onKey);
-  (el.querySelector('[data-act="done"]') as HTMLElement).onclick = close;
+  (el.querySelector('[data-act="create"]') as HTMLElement).onclick = () => { setEquip(equip); onChange?.(); close(); };
+  (el.querySelector('[data-act="rand"]') as HTMLElement).onclick = () => { void randomise(); };
   el.addEventListener('click', (e) => { if (e.target === el) close(); });
 }
