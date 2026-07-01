@@ -120,8 +120,8 @@ export function heroStripCanvas(cfg: HeroConfig, frames: number, amp = 8): HTMLC
 
 // ---- battle stance (separate three-quarter pose, faces +x toward the foe) ----
 export type BattleKind = 'idle' | 'atk' | 'melee';
-// katana blade tip ≈ far right, mid-height in the 512 frame (for the energy glint)
-const MUZZLE = { x: 482, y: 240 };
+// blaster muzzle ≈ upper-right (raised aim) in the 512 frame (for the fire flash)
+const MUZZLE = { x: 420, y: 130 };
 
 function drawBattle(x: CanvasRenderingContext2D, ox: number, o: { bob?: number; dx?: number; flash?: number; slash?: number }) {
   const im = img(BATTLE_SRC);
@@ -148,8 +148,8 @@ export function heroBattleCanvas(cfg: HeroConfig, kind: BattleKind, frames: numb
     const t = frames > 1 ? i / (frames - 1) : 0;
     const s = Math.sin(t * Math.PI); // 0→1→0 arc
     if (kind === 'idle') drawBattle(x, i * 512, { bob: -Math.abs(Math.sin((i / frames) * Math.PI * 2)) * 6 });
-    else if (kind === 'atk') drawBattle(x, i * 512, { dx: s * 7, flash: t > 0.25 && t < 0.75 ? 1 : 0.15 }); // thrust + blade energy glint
-    else drawBattle(x, i * 512, { dx: s * 12, slash: s }); // lunge + katana slash arc
+    else if (kind === 'atk') drawBattle(x, i * 512, { dx: -s * 6, flash: t > 0.2 && t < 0.7 ? 1 : 0.12 }); // recoil kick + blaster muzzle flash
+    else drawBattle(x, i * 512, { dx: s * 12, slash: s }); // dash strike
   }
   return c;
 }
