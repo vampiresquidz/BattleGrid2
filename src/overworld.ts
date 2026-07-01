@@ -68,7 +68,6 @@ import { openOps } from './ops.ts';
 import { initTide, getTide, getClearance, decorateName } from './tide.ts';
 import { openSettings } from './settings.ts';
 import { openCustomizer } from './customizer.ts';
-import { openForge } from './forge.ts';
 
 const BOUNDS = { x: 40, z: 27 };  // expanded play area (large data-continent)
 const SPEED = 6.4;
@@ -1705,14 +1704,6 @@ export class OverworldScene {
         });
         (bodyRow.parentElement ?? bodyRow).insertBefore(cz, bodyRow.nextSibling);
       }
-
-      // 3D Character Forge — AI-generated Mega Man parts + colour (modular3d.ts)
-      const fg = document.createElement('button');
-      fg.className = 'btn';
-      fg.textContent = '🛠 FORGE — 3D hero (parts & colour)';
-      fg.style.cssText = 'width:100%;margin:2px 0 6px';
-      fg.onclick = () => openForge(this.container);
-      (bodyRow.parentElement ?? bodyRow).insertBefore(fg, bodyRow.nextSibling);
 
       const grid = el.querySelector('.roster-grid') as HTMLElement;
       for (const ch of CHARACTERS) {
