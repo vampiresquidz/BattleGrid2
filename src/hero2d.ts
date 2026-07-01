@@ -19,8 +19,8 @@ const BODY_BATTLE = '/sprites/hero2d/body_battle.png';
 const headSrc = (id: string, view: 'f' | 'b') => `/sprites/hero2d/head_${id}_${view}.png`;
 
 // where the head's neck bottom sits (centre-x, neck-y) + target head width, per view
-const FRONT_NECK = { cx: 256, neckY: 150, w: 100 };
-const BATTLE_NECK = { cx: 232, neckY: 156, w: 104 };
+const FRONT_NECK = { cx: 256, neckY: 144, w: 100 };
+const BATTLE_NECK = { cx: 208, neckY: 156, w: 104 };
 
 const KEY = 'abyssal.hero2d';
 export const DEFAULT_HERO: HeroConfig = { head: 'visor', hue: 0 };
