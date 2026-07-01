@@ -11,9 +11,9 @@ export interface HeroConfig { helmet: string; hue: number }
 // helmet overlays fitted to the base head box (centered x, target width + top y
 // in the 512px composite). 'default' = the base's built-in helmet (no overlay).
 export const HELMETS: Array<{ id: string; name: string; src?: string; w?: number; y?: number }> = [
-  { id: 'default', name: 'Standard' },
-  { id: 'aero', name: 'Aero', src: '/sprites/hero2d/helm_aero.png', w: 174, y: 30 },
-  { id: 'horned', name: 'Horned', src: '/sprites/hero2d/helm_horned.png', w: 188, y: 20 },
+  { id: 'default', name: 'Visor' },
+  { id: 'hood', name: 'Hood', src: '/sprites/hero2d/helm_hood.png', w: 176, y: 26 },
+  { id: 'oni', name: 'Oni', src: '/sprites/hero2d/helm_oni.png', w: 190, y: 14 },
 ];
 const BASE_SRC = '/sprites/hero2d/base_front.png';
 const BATTLE_SRC = '/sprites/hero2d/base_battle.png'; // three-quarter combat stance, buster to the right
@@ -120,8 +120,8 @@ export function heroStripCanvas(cfg: HeroConfig, frames: number, amp = 8): HTMLC
 
 // ---- battle stance (separate three-quarter pose, faces +x toward the foe) ----
 export type BattleKind = 'idle' | 'atk' | 'melee';
-// cannon muzzle ≈ right side, mid-height in the 512 frame (for the fire flash)
-const MUZZLE = { x: 452, y: 206 };
+// katana blade tip ≈ far right, mid-height in the 512 frame (for the energy glint)
+const MUZZLE = { x: 482, y: 240 };
 
 function drawBattle(x: CanvasRenderingContext2D, ox: number, o: { bob?: number; dx?: number; flash?: number; slash?: number }) {
   const im = img(BATTLE_SRC);
@@ -148,8 +148,8 @@ export function heroBattleCanvas(cfg: HeroConfig, kind: BattleKind, frames: numb
     const t = frames > 1 ? i / (frames - 1) : 0;
     const s = Math.sin(t * Math.PI); // 0→1→0 arc
     if (kind === 'idle') drawBattle(x, i * 512, { bob: -Math.abs(Math.sin((i / frames) * Math.PI * 2)) * 6 });
-    else if (kind === 'atk') drawBattle(x, i * 512, { dx: -s * 8, flash: t > 0.25 && t < 0.75 ? 1 : 0.15 }); // recoil kick + muzzle burst
-    else drawBattle(x, i * 512, { dx: s * 12, slash: s }); // melee lunge + slash arc
+    else if (kind === 'atk') drawBattle(x, i * 512, { dx: s * 7, flash: t > 0.25 && t < 0.75 ? 1 : 0.15 }); // thrust + blade energy glint
+    else drawBattle(x, i * 512, { dx: s * 12, slash: s }); // lunge + katana slash arc
   }
   return c;
 }
