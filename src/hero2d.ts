@@ -12,8 +12,8 @@ export interface HeroConfig { helmet: string; hue: number }
 // in the 512px composite). 'default' = the base's built-in helmet (no overlay).
 export const HELMETS: Array<{ id: string; name: string; src?: string; w?: number; y?: number }> = [
   { id: 'default', name: 'Visor' },
-  { id: 'hood', name: 'Hood', src: '/sprites/hero2d/helm_hood.png', w: 176, y: 26 },
-  { id: 'oni', name: 'Oni', src: '/sprites/hero2d/helm_oni.png', w: 190, y: 14 },
+  { id: 'hood', name: 'Hood', src: '/sprites/hero2d/helm_hood.png', w: 104, y: 24 },
+  { id: 'oni', name: 'Oni', src: '/sprites/hero2d/helm_oni.png', w: 106, y: 22 },
 ];
 const BASE_SRC = '/sprites/hero2d/base_front.png';
 const BATTLE_SRC = '/sprites/hero2d/base_battle.png'; // three-quarter combat stance, buster to the right
