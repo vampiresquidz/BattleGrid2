@@ -1,7 +1,5 @@
 import * as THREE from 'three';
-import {
-  getModularConfig, modularIdleCanvas, modularWalkCanvas, modularBattleCanvas,
-} from './modular.ts';
+import { getHeroConfig, heroCanvas, heroTexture, heroStripTexture } from './hero2d.ts';
 
 // Real character art generated with gpt-image-1 (see tools/genimg.py), served
 // from /public/sprites. Loaded as textures with crisp magnification so the
@@ -462,14 +460,14 @@ function paintHumanoid(c: HTMLCanvasElement, body: AgentBody, view: AgentView, c
 // signature, so we only wash the armour with the character's hue and let the neon
 // accents bleed through rather than recolouring them away.
 export function humanoidCanvas(color: string, view: AgentView = 'front', strength = 0.45, body: AgentBody = 'humanoid'): HTMLCanvasElement {
-  if (body === 'custom') return modularIdleCanvas(view, getModularConfig());
+  if (body === 'custom') return heroCanvas(getHeroConfig());
   const c = document.createElement('canvas'); c.width = c.height = 512;
   paintHumanoid(c, body, view, color, strength);
   return c;
 }
 
 export function humanoidTexture(color: string, view: AgentView = 'front', strength = 0.45, body: AgentBody = 'humanoid'): THREE.Texture {
-  if (body === 'custom') return pixelTex(modularIdleCanvas(view, getModularConfig()));
+  if (body === 'custom') return heroTexture(getHeroConfig());
   const c = humanoidCanvas(color, view, strength, body);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace; t.magFilter = THREE.NearestFilter; t.anisotropy = 4;
@@ -532,7 +530,7 @@ function stripTexture(src: string, frames: number, color: string, strength: numb
 }
 
 export function humanoidWalkTexture(color: string, dir: WalkDir, strength = 0.45, body: AgentBody = 'humanoid'): THREE.Texture {
-  if (body === 'custom') return pixelTex(modularWalkCanvas(dir, getModularConfig(), WALK_FRAMES));
+  if (body === 'custom') return heroStripTexture(getHeroConfig(), WALK_FRAMES);
   return stripTexture(WALK_SRC[body][dir], WALK_FRAMES, color, strength);
 }
 
@@ -560,17 +558,17 @@ const BATTLE_MELEE_SRC: Record<AgentBody, string> = {
 };
 
 export function battleIdleTexture(color: string, strength = 0.45, body: AgentBody = 'humanoid'): THREE.Texture {
-  if (body === 'custom') return pixelTex(modularBattleCanvas('idle', getModularConfig(), BATTLE_IDLE_FRAMES));
+  if (body === 'custom') return heroStripTexture(getHeroConfig(), BATTLE_IDLE_FRAMES);
   return stripTexture(BATTLE_IDLE_SRC[body], BATTLE_IDLE_FRAMES, color, strength);
 }
 
 export function battleAttackTexture(color: string, strength = 0.45, body: AgentBody = 'humanoid'): THREE.Texture {
-  if (body === 'custom') return pixelTex(modularBattleCanvas('atk', getModularConfig(), BATTLE_ATK_FRAMES));
+  if (body === 'custom') return heroStripTexture(getHeroConfig(), BATTLE_ATK_FRAMES);
   return stripTexture(BATTLE_ATK_SRC[body], BATTLE_ATK_FRAMES, color, strength);
 }
 
 // melee = a forward crescent slash sweep (distinct from the buster muzzle burst)
 export function battleMeleeTexture(color: string, strength = 0.45, body: AgentBody = 'humanoid'): THREE.Texture {
-  if (body === 'custom') return pixelTex(modularBattleCanvas('melee', getModularConfig(), BATTLE_MELEE_FRAMES));
+  if (body === 'custom') return heroStripTexture(getHeroConfig(), BATTLE_MELEE_FRAMES);
   return stripTexture(BATTLE_MELEE_SRC[body], BATTLE_MELEE_FRAMES, color, strength);
 }
