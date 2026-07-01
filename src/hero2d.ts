@@ -14,12 +14,17 @@ export const HEADS: Array<{ id: string; name: string }> = [
   { id: 'hood', name: 'Hood' },
   { id: 'oni', name: 'Oni' },
 ];
-const BODY_FRONT = '/sprites/hero2d/body_front.png';
 const BODY_BATTLE = '/sprites/hero2d/body_battle.png';
-const headSrc = (id: string, view: 'f' | 'b') => `/sprites/hero2d/head_${id}_${view}.png`;
+const headSrc = (id: string, suffix: string) => `/sprites/hero2d/head_${id}_${suffix}.png`;
 
-// where the head's neck bottom sits (centre-x, neck-y) + target head width, per view
-const FRONT_NECK = { cx: 256, neckY: 144, w: 100 };
+// overworld directional views: each has a body, a head suffix (f=front, k=back,
+// b=3/4 profile reused for the side), and a neck anchor (centre-x, neck-y, width).
+export type HeroView = 'front' | 'back' | 'side';
+const VIEWS: Record<HeroView, { body: string; hs: string; neck: { cx: number; neckY: number; w: number } }> = {
+  front: { body: '/sprites/hero2d/body_front.png', hs: 'f', neck: { cx: 256, neckY: 144, w: 100 } },
+  back: { body: '/sprites/hero2d/body_back.png', hs: 'k', neck: { cx: 256, neckY: 100, w: 100 } },
+  side: { body: '/sprites/hero2d/body_side.png', hs: 'b', neck: { cx: 210, neckY: 96, w: 100 } },
+};
 const BATTLE_NECK = { cx: 208, neckY: 156, w: 104 };
 
 const KEY = 'abyssal.hero2d';
@@ -76,35 +81,45 @@ function trimBox(im: HTMLImageElement) {
 }
 
 // draw a head part centred at anchor.cx with its bottom on anchor.neckY
-function drawHead(x: CanvasRenderingContext2D, ox: number, id: string, view: 'f' | 'b', a: { cx: number; neckY: number; w: number }, off = { dx: 0, dy: 0 }) {
-  const im = img(headSrc(id, view));
+function drawHead(x: CanvasRenderingContext2D, ox: number, id: string, suffix: string, a: { cx: number; neckY: number; w: number }, off = { dx: 0, dy: 0 }) {
+  const im = img(headSrc(id, suffix));
   if (!im.complete || !im.naturalWidth) return;
   const bb = trimBox(im); const s = a.w / bb.w;
   const dw = bb.w * s, dh = bb.h * s;
   x.drawImage(im, bb.x, bb.y, bb.w, bb.h, ox + a.cx - dw / 2 + off.dx, a.neckY - dh + off.dy, dw, dh);
 }
 
-function srcsForView(cfg: HeroConfig, view: 'f' | 'b'): string[] {
-  return [view === 'f' ? BODY_FRONT : BODY_BATTLE, headSrc(cfg.head, view)];
+function srcsForView(cfg: HeroConfig, view: HeroView): string[] {
+  const v = VIEWS[view]; return [v.body, headSrc(cfg.head, v.hs)];
 }
 
-// ---- front (overworld) ----
-function drawFront(x: CanvasRenderingContext2D, ox: number, cfg: HeroConfig, bob = 0) {
-  const body = img(BODY_FRONT);
-  if (body.complete && body.naturalWidth) x.drawImage(body, ox, bob, 512, 512);
-  drawHead(x, ox, cfg.head, 'f', FRONT_NECK, { dx: 0, dy: bob });
-}
-
-export function heroCanvas(cfg: HeroConfig): HTMLCanvasElement {
+// compose one 512 view frame (body + head, with an optional bob) — NOT tinted
+function composeView(view: HeroView, cfg: HeroConfig, bob: number): HTMLCanvasElement {
   const c = document.createElement('canvas'); c.width = c.height = 512;
-  const x = c.getContext('2d')!; x.imageSmoothingEnabled = false; x.filter = `hue-rotate(${cfg.hue || 0}deg)`;
-  drawFront(x, 0, cfg);
+  const x = c.getContext('2d')!; x.imageSmoothingEnabled = false;
+  const v = VIEWS[view];
+  const body = img(v.body);
+  if (body.complete && body.naturalWidth) x.drawImage(body, 0, bob, 512, 512);
+  drawHead(x, 0, cfg.head, v.hs, v.neck, { dx: 0, dy: bob });
   return c;
 }
-export function heroStripCanvas(cfg: HeroConfig, frames: number, amp = 8): HTMLCanvasElement {
+// blit a composed frame into the strip at ox, mirrored for left-facing
+function blit(x: CanvasRenderingContext2D, frame: HTMLCanvasElement, ox: number, mirror: boolean) {
+  if (mirror) { x.save(); x.translate(ox + 512, 0); x.scale(-1, 1); x.drawImage(frame, 0, 0); x.restore(); }
+  else x.drawImage(frame, ox, 0);
+}
+
+// ---- overworld (directional) ----
+export function heroCanvas(cfg: HeroConfig, view: HeroView = 'front', mirror = false): HTMLCanvasElement {
+  const c = document.createElement('canvas'); c.width = c.height = 512;
+  const x = c.getContext('2d')!; x.imageSmoothingEnabled = false; x.filter = `hue-rotate(${cfg.hue || 0}deg)`;
+  blit(x, composeView(view, cfg, 0), 0, mirror);
+  return c;
+}
+export function heroStripCanvas(cfg: HeroConfig, view: HeroView, mirror: boolean, frames: number, amp = 8): HTMLCanvasElement {
   const c = document.createElement('canvas'); c.width = 512 * frames; c.height = 512;
   const x = c.getContext('2d')!; x.imageSmoothingEnabled = false; x.filter = `hue-rotate(${cfg.hue || 0}deg)`;
-  for (let i = 0; i < frames; i++) drawFront(x, i * 512, cfg, -Math.abs(Math.sin((i / frames) * Math.PI * 2)) * amp);
+  for (let i = 0; i < frames; i++) blit(x, composeView(view, cfg, -Math.abs(Math.sin((i / frames) * Math.PI * 2)) * amp), i * 512, mirror);
   return c;
 }
 
@@ -148,18 +163,18 @@ function pixelTex(c: HTMLCanvasElement): THREE.Texture {
   return t;
 }
 
-export function heroTexture(cfg: HeroConfig): THREE.Texture {
-  const t = pixelTex(heroCanvas(cfg));
-  onReady(srcsForView(cfg, 'f'), () => { t.image = heroCanvas(cfg); t.needsUpdate = true; });
+export function heroTexture(cfg: HeroConfig, view: HeroView = 'front', mirror = false): THREE.Texture {
+  const t = pixelTex(heroCanvas(cfg, view, mirror));
+  onReady(srcsForView(cfg, view), () => { t.image = heroCanvas(cfg, view, mirror); t.needsUpdate = true; });
   return t;
 }
-export function heroStripTexture(cfg: HeroConfig, frames: number, amp = 8): THREE.Texture {
-  const t = pixelTex(heroStripCanvas(cfg, frames, amp));
-  onReady(srcsForView(cfg, 'f'), () => { t.image = heroStripCanvas(cfg, frames, amp); t.needsUpdate = true; });
+export function heroStripTexture(cfg: HeroConfig, view: HeroView, mirror: boolean, frames: number, amp = 8): THREE.Texture {
+  const t = pixelTex(heroStripCanvas(cfg, view, mirror, frames, amp));
+  onReady(srcsForView(cfg, view), () => { t.image = heroStripCanvas(cfg, view, mirror, frames, amp); t.needsUpdate = true; });
   return t;
 }
 export function heroBattleTexture(cfg: HeroConfig, kind: BattleKind, frames: number): THREE.Texture {
   const t = pixelTex(heroBattleCanvas(cfg, kind, frames));
-  onReady(srcsForView(cfg, 'b'), () => { t.image = heroBattleCanvas(cfg, kind, frames); t.needsUpdate = true; });
+  onReady([BODY_BATTLE, headSrc(cfg.head, 'b')], () => { t.image = heroBattleCanvas(cfg, kind, frames); t.needsUpdate = true; });
   return t;
 }

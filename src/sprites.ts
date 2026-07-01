@@ -1,5 +1,13 @@
 import * as THREE from 'three';
-import { getHeroConfig, heroCanvas, heroTexture, heroStripTexture, heroBattleTexture } from './hero2d.ts';
+import { getHeroConfig, heroCanvas, heroTexture, heroStripTexture, heroBattleTexture, type HeroView } from './hero2d.ts';
+
+// map an AgentView / WalkDir to the hero's directional view (+ mirror for left)
+function heroDir(s: string): { view: HeroView; mirror: boolean } {
+  if (s === 'back' || s === 'up') return { view: 'back', mirror: false };
+  if (s === 'left') return { view: 'side', mirror: true };
+  if (s === 'right') return { view: 'side', mirror: false };
+  return { view: 'front', mirror: false }; // front / down / battle
+}
 
 // Real character art generated with gpt-image-1 (see tools/genimg.py), served
 // from /public/sprites. Loaded as textures with crisp magnification so the
@@ -460,14 +468,14 @@ function paintHumanoid(c: HTMLCanvasElement, body: AgentBody, view: AgentView, c
 // signature, so we only wash the armour with the character's hue and let the neon
 // accents bleed through rather than recolouring them away.
 export function humanoidCanvas(color: string, view: AgentView = 'front', strength = 0.45, body: AgentBody = 'humanoid'): HTMLCanvasElement {
-  if (body === 'custom') return heroCanvas(getHeroConfig());
+  if (body === 'custom') { const d = heroDir(view); return heroCanvas(getHeroConfig(), d.view, d.mirror); }
   const c = document.createElement('canvas'); c.width = c.height = 512;
   paintHumanoid(c, body, view, color, strength);
   return c;
 }
 
 export function humanoidTexture(color: string, view: AgentView = 'front', strength = 0.45, body: AgentBody = 'humanoid'): THREE.Texture {
-  if (body === 'custom') return heroTexture(getHeroConfig());
+  if (body === 'custom') { const d = heroDir(view); return heroTexture(getHeroConfig(), d.view, d.mirror); }
   const c = humanoidCanvas(color, view, strength, body);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace; t.magFilter = THREE.NearestFilter; t.anisotropy = 4;
@@ -530,7 +538,7 @@ function stripTexture(src: string, frames: number, color: string, strength: numb
 }
 
 export function humanoidWalkTexture(color: string, dir: WalkDir, strength = 0.45, body: AgentBody = 'humanoid'): THREE.Texture {
-  if (body === 'custom') return heroStripTexture(getHeroConfig(), WALK_FRAMES);
+  if (body === 'custom') { const d = heroDir(dir); return heroStripTexture(getHeroConfig(), d.view, d.mirror, WALK_FRAMES); }
   return stripTexture(WALK_SRC[body][dir], WALK_FRAMES, color, strength);
 }
 
