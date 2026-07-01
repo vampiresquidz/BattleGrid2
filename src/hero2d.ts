@@ -16,6 +16,7 @@ export const HELMETS: Array<{ id: string; name: string; src?: string; w?: number
   { id: 'horned', name: 'Horned', src: '/sprites/hero2d/helm_horned.png', w: 188, y: 20 },
 ];
 const BASE_SRC = '/sprites/hero2d/base_front.png';
+const BATTLE_SRC = '/sprites/hero2d/base_battle.png'; // three-quarter combat stance, buster to the right
 
 const KEY = 'abyssal.hero2d';
 export const DEFAULT_HERO: HeroConfig = { helmet: 'default', hue: 0 };
@@ -117,6 +118,42 @@ export function heroStripCanvas(cfg: HeroConfig, frames: number, amp = 8): HTMLC
   return c;
 }
 
+// ---- battle stance (separate three-quarter pose, faces +x toward the foe) ----
+export type BattleKind = 'idle' | 'atk' | 'melee';
+// cannon muzzle ≈ right side, mid-height in the 512 frame (for the fire flash)
+const MUZZLE = { x: 452, y: 206 };
+
+function drawBattle(x: CanvasRenderingContext2D, ox: number, o: { bob?: number; dx?: number; flash?: number; slash?: number }) {
+  const im = img(BATTLE_SRC);
+  const dx = o.dx ?? 0, bob = o.bob ?? 0;
+  if (im.complete && im.naturalWidth) x.drawImage(im, ox + dx, bob, 512, 512);
+  if (o.flash) {
+    const cx = ox + dx + MUZZLE.x, cy = MUZZLE.y + bob, r = 14 + o.flash * 18;
+    const g = x.createRadialGradient(cx, cy, 0, cx, cy, r);
+    g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(0.4, 'rgba(120,240,255,0.8)'); g.addColorStop(1, 'rgba(120,240,255,0)');
+    x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill();
+  }
+  if (o.slash) {
+    const cx = ox + dx + 360, cy = 230 + bob;
+    x.save(); x.strokeStyle = 'rgba(150,240,255,' + (0.7 * o.slash).toFixed(2) + ')'; x.lineWidth = 10;
+    x.beginPath(); x.arc(cx, cy, 90 + o.slash * 20, -1.1, 0.7); x.stroke(); x.restore();
+  }
+}
+
+export function heroBattleCanvas(cfg: HeroConfig, kind: BattleKind, frames: number): HTMLCanvasElement {
+  const c = document.createElement('canvas'); c.width = 512 * frames; c.height = 512;
+  const x = c.getContext('2d')!; x.imageSmoothingEnabled = false;
+  x.filter = `hue-rotate(${cfg.hue || 0}deg)`;
+  for (let i = 0; i < frames; i++) {
+    const t = frames > 1 ? i / (frames - 1) : 0;
+    const s = Math.sin(t * Math.PI); // 0→1→0 arc
+    if (kind === 'idle') drawBattle(x, i * 512, { bob: -Math.abs(Math.sin((i / frames) * Math.PI * 2)) * 6 });
+    else if (kind === 'atk') drawBattle(x, i * 512, { dx: -s * 8, flash: t > 0.25 && t < 0.75 ? 1 : 0.15 }); // recoil kick + muzzle burst
+    else drawBattle(x, i * 512, { dx: s * 12, slash: s }); // melee lunge + slash arc
+  }
+  return c;
+}
+
 function pixelTex(c: HTMLCanvasElement): THREE.Texture {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace; t.magFilter = THREE.NearestFilter; t.anisotropy = 4;
@@ -131,5 +168,10 @@ export function heroTexture(cfg: HeroConfig): THREE.Texture {
 export function heroStripTexture(cfg: HeroConfig, frames: number, amp = 8): THREE.Texture {
   const t = pixelTex(heroStripCanvas(cfg, frames, amp));
   onReady(srcsFor(cfg), () => { const c = heroStripCanvas(cfg, frames, amp); t.image = c; t.needsUpdate = true; });
+  return t;
+}
+export function heroBattleTexture(cfg: HeroConfig, kind: BattleKind, frames: number): THREE.Texture {
+  const t = pixelTex(heroBattleCanvas(cfg, kind, frames));
+  onReady([BATTLE_SRC], () => { const c = heroBattleCanvas(cfg, kind, frames); t.image = c; t.needsUpdate = true; });
   return t;
 }

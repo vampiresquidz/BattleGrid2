@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getHeroConfig, heroCanvas, heroTexture, heroStripTexture } from './hero2d.ts';
+import { getHeroConfig, heroCanvas, heroTexture, heroStripTexture, heroBattleTexture } from './hero2d.ts';
 
 // Real character art generated with gpt-image-1 (see tools/genimg.py), served
 // from /public/sprites. Loaded as textures with crisp magnification so the
@@ -558,17 +558,17 @@ const BATTLE_MELEE_SRC: Record<AgentBody, string> = {
 };
 
 export function battleIdleTexture(color: string, strength = 0.45, body: AgentBody = 'humanoid'): THREE.Texture {
-  if (body === 'custom') return heroStripTexture(getHeroConfig(), BATTLE_IDLE_FRAMES);
+  if (body === 'custom') return heroBattleTexture(getHeroConfig(), 'idle', BATTLE_IDLE_FRAMES);
   return stripTexture(BATTLE_IDLE_SRC[body], BATTLE_IDLE_FRAMES, color, strength);
 }
 
 export function battleAttackTexture(color: string, strength = 0.45, body: AgentBody = 'humanoid'): THREE.Texture {
-  if (body === 'custom') return heroStripTexture(getHeroConfig(), BATTLE_ATK_FRAMES);
+  if (body === 'custom') return heroBattleTexture(getHeroConfig(), 'atk', BATTLE_ATK_FRAMES);
   return stripTexture(BATTLE_ATK_SRC[body], BATTLE_ATK_FRAMES, color, strength);
 }
 
 // melee = a forward crescent slash sweep (distinct from the buster muzzle burst)
 export function battleMeleeTexture(color: string, strength = 0.45, body: AgentBody = 'humanoid'): THREE.Texture {
-  if (body === 'custom') return heroStripTexture(getHeroConfig(), BATTLE_MELEE_FRAMES);
+  if (body === 'custom') return heroBattleTexture(getHeroConfig(), 'melee', BATTLE_MELEE_FRAMES);
   return stripTexture(BATTLE_MELEE_SRC[body], BATTLE_MELEE_FRAMES, color, strength);
 }
