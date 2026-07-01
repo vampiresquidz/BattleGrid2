@@ -2,7 +2,7 @@
 // A live pixel preview + a HELMET cycle (swappable gpt-generated layer) + a
 // COLOUR hue slider. Persists to hero2d config and calls onChange so the live
 // overworld/battle sprite updates.
-import { getHeroConfig, setHeroConfig, heroCanvas, HELMETS, type HeroConfig } from './hero2d.ts';
+import { getHeroConfig, setHeroConfig, heroCanvas, HEADS, type HeroConfig } from './hero2d.ts';
 
 export function openCustomizer(container: HTMLElement, onChange: () => void): void {
   if (document.getElementById('customizer')) return;
@@ -14,7 +14,7 @@ export function openCustomizer(container: HTMLElement, onChange: () => void): vo
   el.innerHTML = `
     <div class="roster-panel" style="max-width:520px;width:94%;max-height:92vh;overflow:auto">
       <h2>CUSTOMISE AGENT</h2>
-      <div class="sub">Swap the helmet layer and recolour your pixel hero. Saves instantly.</div>
+      <div class="sub">Swap the head part and recolour your pixel hero. Saves instantly.</div>
       <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-top:14px">
         <div style="flex:0 0 auto"><canvas id="cz-prev" width="200" height="200"
           style="width:200px;height:200px;image-rendering:pixelated;background:radial-gradient(circle at 50% 40%,#1a2540,#0a0e18);border:1px solid #2c4a7a;border-radius:12px"></canvas></div>
@@ -43,10 +43,10 @@ export function openCustomizer(container: HTMLElement, onChange: () => void): vo
 
   const render = () => {
     controls.innerHTML = '';
-    // helmet cycle
-    const hi = Math.max(0, HELMETS.findIndex((h) => h.id === cfg.helmet));
-    controls.appendChild(cycleRow('HELMET', HELMETS[hi]?.name ?? 'Standard', (d) => {
-      cfg.helmet = HELMETS[(hi + d + HELMETS.length) % HELMETS.length].id; apply(); render();
+    // head-part cycle
+    const hi = Math.max(0, HEADS.findIndex((h) => h.id === cfg.head));
+    controls.appendChild(cycleRow('HEAD', HEADS[hi]?.name ?? 'Visor', (d) => {
+      cfg.head = HEADS[(hi + d + HEADS.length) % HEADS.length].id; apply(); render();
     }));
     // colour hue slider
     const hueRow = document.createElement('div'); hueRow.style.cssText = 'margin:12px 0';
