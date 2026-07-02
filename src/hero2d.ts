@@ -22,8 +22,8 @@ const headSrc = (id: string, suffix: string) => `/sprites/hero2d/head_${id}_${su
 export type HeroView = 'front' | 'back' | 'side';
 const VIEWS: Record<HeroView, { body: string; hs: string; neck: { cx: number; neckY: number; w: number } }> = {
   front: { body: '/sprites/hero2d/body_front.png', hs: 'f', neck: { cx: 256, neckY: 144, w: 100 } },
-  back: { body: '/sprites/hero2d/body_back.png', hs: 'k', neck: { cx: 256, neckY: 100, w: 100 } },
-  side: { body: '/sprites/hero2d/body_side.png', hs: 'b', neck: { cx: 244, neckY: 134, w: 96 } },
+  back: { body: '/sprites/hero2d/body_back.png', hs: 'k', neck: { cx: 255, neckY: 131, w: 100 } },
+  side: { body: '/sprites/hero2d/body_side.png', hs: 'b', neck: { cx: 252, neckY: 140, w: 96 } },
 };
 const BATTLE_NECK = { cx: 208, neckY: 156, w: 104 };
 
